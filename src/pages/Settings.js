@@ -806,148 +806,195 @@ function Settings() {
     );
   }
 
+  // Add state for active tab
+  const [activeTab, setActiveTab] = useState('studio');
+
   return (
     <>
       <style>{sliderStyles}</style>
-      <div className="px-6 py-6 max-w-7xl mx-auto">
-      {/* Messages */}
-      {error && (
-        <Alert className="mb-6 border-red-500 bg-red-50 dark:bg-red-950">
-          <AlertDescription className="text-red-700 dark:text-red-200">
-            {error}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {success && (
-        <Alert className="mb-6 border-green-500 bg-green-50 dark:bg-green-950">
-          <AlertDescription className="text-green-700 dark:text-green-200">
-            {success}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Vehicle Samples Selection - More Prominent */}
-      <div className="mb-6">
-        <div className="flex items-center space-x-3 mb-3">
-          <Camera className="h-5 w-5 text-primary" />
-          <span className="text-base font-semibold">Vehicle Samples</span>
-        </div>
-        <div className="flex space-x-3 overflow-x-auto pb-2">
-          {vehicleSamples.map((sample) => (
-            <div
-              key={sample.id}
-              className={cn(
-                "flex-shrink-0 flex items-center space-x-3 p-3 border-2 rounded-lg cursor-pointer transition-all min-w-[120px]",
-                selectedSample?.id === sample.id
-                  ? "border-primary bg-primary/10 shadow-md"
-                  : "border-border hover:bg-muted/50 hover:border-primary/30"
-              )}
-              onClick={() => setSelectedSample(sample)}
-            >
-              {sample.images && sample.images.length > 0 && (
-                <img
-                  src={`${BACKEND_URL}${sample.images[0].imageUrl.startsWith('/') ? '' : '/'}${sample.images[0].imageUrl}`}
-                  alt={sample.name}
-                  className="w-10 h-8 object-cover rounded flex-shrink-0"
-                />
-              )}
-              <div className="min-w-0">
-                <p className="font-semibold text-sm truncate">{sample.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {sample.images?.length || 0} shots
-                </p>
-              </div>
+      <div className="flex min-h-screen bg-background">
+        {/* Left Sidebar */}
+        <div className="w-64 bg-card border-r border-border flex-shrink-0">
+          <div className="p-6">
+            <div className="flex items-center space-x-3 mb-6">
+              <SettingsIcon className="h-6 w-6 text-primary" />
+              <h1 className="text-xl font-semibold">Settings</h1>
             </div>
-          ))}
+            
+            {/* Sidebar Navigation */}
+            <nav className="space-y-2">
+              <button
+                onClick={() => setActiveTab('studio')}
+                className={cn(
+                  "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors",
+                  activeTab === 'studio'
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Camera className="h-4 w-4" />
+                <span className="font-medium">Studio</span>
+              </button>
+              
+              <button
+                onClick={() => setActiveTab('license-plate')}
+                className={cn(
+                  "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors",
+                  activeTab === 'license-plate'
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <ImageIcon className="h-4 w-4" />
+                <span className="font-medium">License Plate</span>
+              </button>
+            </nav>
+          </div>
         </div>
-      </div>
 
-      {/* Studio Configuration */}
-      <Card>
-        <CardContent className="p-6">
-          {/* Shot Type Tabs */}
-          <Tabs value={activeShot} onValueChange={setActiveShot} className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
-              {shotTypes.map((shot) => (
-                <TabsTrigger
-                  key={shot.key}
-                  value={shot.key}
-                  className="text-xs"
-                >
-                  <span>{shot.label}</span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
+        {/* Main Content Area */}
+        <div className="flex-1 px-6 py-6 max-w-6xl">
+          {/* Messages */}
+          {error && (
+            <Alert className="mb-6 border-red-500 bg-red-50 dark:bg-red-950">
+              <AlertDescription className="text-red-700 dark:text-red-200">
+                {error}
+              </AlertDescription>
+            </Alert>
+          )}
 
-            {shotTypes.map((shot) => (
-              <TabsContent key={shot.key} value={shot.key} className="mt-6">
-                <div className="space-y-6">
-                  {/* Background Upload - Matching Production Layout */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-sm font-medium">Background Image</Label>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Current: {dealershipData.backgrounds[shot.key] || 'None'}
-                      </p>
-                    </div>
-                    <div className="flex space-x-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleBackgroundUpload}
-                        className="hidden"
-                        id={`bg-upload-${shot.key}`}
-                      />
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => document.getElementById(`bg-upload-${shot.key}`)?.click()}
-                        disabled={uploadingBackground}
-                        className="bg-primary text-primary-foreground hover:bg-primary/90"
-                      >
-                        {uploadingBackground && currentShotForUpload === shot.key ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="mr-2 h-4 w-4" />
-                            Upload Background
-                          </>
-                        )}
-                      </Button>
-                      
-                      {/* Copy Background Button */}
-                      {Object.keys(dealershipData.backgrounds || {}).some(key => 
-                        dealershipData.backgrounds[key] && key !== shot.key
-                      ) && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setCurrentShotForUpload(shot.key);
-                            setShowCopyModal(true);
-                          }}
-                          disabled={uploadingBackground}
-                        >
-                          <Copy className="mr-2 h-4 w-4" />
-                          Copy
-                        </Button>
+          {success && (
+            <Alert className="mb-6 border-green-500 bg-green-50 dark:bg-green-950">
+              <AlertDescription className="text-green-700 dark:text-green-200">
+                {success}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Studio Tab Content */}
+          {activeTab === 'studio' && (
+            <>
+              {/* Vehicle Samples Selection - More Prominent */}
+              <div className="mb-6">
+                <div className="flex items-center space-x-3 mb-3">
+                  <Camera className="h-5 w-5 text-primary" />
+                  <span className="text-base font-semibold">Vehicle Samples</span>
+                </div>
+                <div className="flex space-x-3 overflow-x-auto pb-2">
+                  {vehicleSamples.map((sample) => (
+                    <div
+                      key={sample.id}
+                      className={cn(
+                        "flex-shrink-0 flex items-center space-x-3 p-3 border-2 rounded-lg cursor-pointer transition-all min-w-[120px]",
+                        selectedSample?.id === sample.id
+                          ? "border-primary bg-primary/10 shadow-md"
+                          : "border-border hover:bg-muted/50 hover:border-primary/30"
                       )}
+                      onClick={() => setSelectedSample(sample)}
+                    >
+                      {sample.images && sample.images.length > 0 && (
+                        <img
+                          src={`${BACKEND_URL}${sample.images[0].imageUrl.startsWith('/') ? '' : '/'}${sample.images[0].imageUrl}`}
+                          alt={sample.name}
+                          className="w-10 h-8 object-cover rounded flex-shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{sample.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {sample.images?.length || 0} shots
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  ))}
+                </div>
+              </div>
 
-                  {/* Visual Preview & Adjustment */}
-                  <div className="space-y-4">
-                    <Label className="text-sm font-medium">Position & Scale Adjustment</Label>
-                    
-                                         {/* Preview Container - Fixed 4:3 Ratio */}
-                     <div className="w-full max-w-4xl mx-auto">
-                       <div 
-                         ref={containerRef}
-                         className="image-adjustor-container relative border-2 border-dashed border-muted-foreground/30 rounded-lg overflow-hidden bg-muted/20"
+              {/* Studio Configuration */}
+              <Card>
+                <CardContent className="p-6">
+                  {/* Shot Type Tabs */}
+                  <Tabs value={activeShot} onValueChange={setActiveShot} className="w-full">
+                    <TabsList className="grid w-full grid-cols-5">
+                      {shotTypes.map((shot) => (
+                        <TabsTrigger
+                          key={shot.key}
+                          value={shot.key}
+                          className="text-xs"
+                        >
+                          <span>{shot.label}</span>
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+
+                    {shotTypes.map((shot) => (
+                      <TabsContent key={shot.key} value={shot.key} className="mt-6">
+                        <div className="space-y-6">
+                          {/* Background Upload - Matching Production Layout */}
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <Label className="text-sm font-medium">Background Image</Label>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Current: {dealershipData.backgrounds[shot.key] || 'None'}
+                              </p>
+                            </div>
+                            <div className="flex space-x-2">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleBackgroundUpload}
+                                className="hidden"
+                                id={`bg-upload-${shot.key}`}
+                              />
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => document.getElementById(`bg-upload-${shot.key}`)?.click()}
+                                disabled={uploadingBackground}
+                                className="bg-primary text-primary-foreground hover:bg-primary/90"
+                              >
+                                {uploadingBackground && currentShotForUpload === shot.key ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Uploading...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="mr-2 h-4 w-4" />
+                                    Upload Background
+                                  </>
+                                )}
+                              </Button>
+                              
+                              {/* Copy Background Button */}
+                              {Object.keys(dealershipData.backgrounds || {}).some(key => 
+                                dealershipData.backgrounds[key] && key !== shot.key
+                              ) && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setCurrentShotForUpload(shot.key);
+                                    setShowCopyModal(true);
+                                  }}
+                                  disabled={uploadingBackground}
+                                >
+                                  <Copy className="mr-2 h-4 w-4" />
+                                  Copy
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Visual Preview & Adjustment */}
+                          <div className="space-y-4">
+                            <Label className="text-sm font-medium">Position & Scale Adjustment</Label>
+                            
+                            {/* Preview Container - Fixed 4:3 Ratio */}
+                            <div className="w-full max-w-4xl mx-auto">
+                              <div 
+                                ref={containerRef}
+                                className="image-adjustor-container relative border-2 border-dashed border-muted-foreground/30 rounded-lg overflow-hidden bg-muted/20"
                          style={{
                            backgroundImage: getBackgroundImageUrl() ? `url(${getBackgroundImageUrl()})` : 'none',
                            backgroundSize: 'cover',
@@ -1077,11 +1124,104 @@ function Settings() {
           ) : (
             <>
               <Save className="mr-2 h-4 w-4" />
-                                    Save
+              Save
             </>
           )}
         </Button>
       </div>
+            </>
+          )}
+
+          {/* License Plate Tab Content */}
+          {activeTab === 'license-plate' && (
+            <>
+              <div className="mb-6">
+                <div className="flex items-center space-x-3 mb-3">
+                  <ImageIcon className="h-5 w-5 text-primary" />
+                  <span className="text-base font-semibold">License Plate Management</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Upload and manage your dealership logos for license plate generation.
+                </p>
+              </div>
+
+              <Card>
+                <CardContent className="p-6">
+                  <div className="space-y-6">
+                    {/* Logo Upload Section */}
+                    <div className="space-y-4">
+                      <Label className="text-sm font-medium">Upload New Logo</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Upload a logo to see how it will appear on the license plate.
+                      </p>
+                      
+                      <div className="flex items-center space-x-4">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              // Handle logo upload logic here
+                              console.log('Logo file selected:', file);
+                            }
+                          }}
+                          className="hidden"
+                          id="logo-upload"
+                        />
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => document.getElementById('logo-upload')?.click()}
+                          className="bg-primary text-primary-foreground hover:bg-primary/90"
+                        >
+                          <Upload className="mr-2 h-4 w-4" />
+                          Upload Logo
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* License Plate Preview */}
+                    <div className="space-y-4">
+                      <Label className="text-sm font-medium">License Plate Preview</Label>
+                      <div className="w-full max-w-md mx-auto">
+                        <div className="relative bg-yellow-400 border-4 border-gray-800 rounded-lg p-4 aspect-[3/1] flex items-center justify-center">
+                          {/* License Plate Background */}
+                          <div className="absolute inset-0 bg-yellow-400 rounded-lg"></div>
+                          
+                          {/* Logo Placeholder */}
+                          <div className="relative z-10 text-center">
+                            <div className="w-16 h-16 bg-gray-300 rounded-lg flex items-center justify-center mx-auto mb-2">
+                              <ImageIcon className="h-8 w-8 text-gray-500" />
+                            </div>
+                            <p className="text-xs text-gray-600 font-mono">LOGO HERE</p>
+                            <p className="text-xs text-gray-600 font-mono mt-1">UPLOAD LOGO TO PREVIEW</p>
+                          </div>
+                          
+                          {/* License Plate Text */}
+                          <div className="absolute bottom-2 left-2 right-2 text-center">
+                            <p className="text-xs text-gray-800 font-bold">DEALERSHIP NAME</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Uploaded Logos */}
+                    <div className="space-y-4">
+                      <Label className="text-sm font-medium">Uploaded Logos</Label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {/* Placeholder for uploaded logos */}
+                        <div className="border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 text-center">
+                          <ImageIcon className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                          <p className="text-xs text-muted-foreground">No logos uploaded yet</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
 
              {/* Copy Background Modal */}
        {showCopyModal && (
@@ -1300,6 +1440,7 @@ function Settings() {
           </div>
         </div>
       )}
+        </div>
       </div>
     </>
   );
