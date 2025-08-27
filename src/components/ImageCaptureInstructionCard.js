@@ -112,7 +112,7 @@ function ImageCaptureInstructionCard({
         bottom: 0,
       }}
     >
-      <Row style={{ height: "100%", padding: "16px" }}>
+      <Row style={{ height: "100%", padding: "8px 16px" }}>
         {/* Left Column */}
         <Col
           span={12}
@@ -161,7 +161,7 @@ function ImageCaptureInstructionCard({
           </div>
 
           {/* Action buttons positioned higher up */}
-          <div className="space-y-3 flex-shrink-0 mt-4">
+          <div className="space-y-3 flex-shrink-0 ">
             <div className="flex gap-3">
               <ShadCNButton
                 onClick={onStartShooting}

@@ -362,7 +362,7 @@ const ImageAdjustor = ({
       >
         Toggle Arrows
       </Menu.Item>
-      {(isMobile || isTablet) &&
+      {/* {(isMobile || isTablet) &&
         userDealership === "Demo" && (
           <Menu.Item
             key="liveBackground"
@@ -401,7 +401,7 @@ const ImageAdjustor = ({
           >
             Live Background
           </Menu.Item>
-        )}
+        )} */}
 
       <Menu.Item
         key="reset"
