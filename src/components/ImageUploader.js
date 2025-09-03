@@ -13,6 +13,7 @@ export const handleUploadImage = async ({
   dealership,
   jwtToken,
   skipBGRemoval,
+  weather,
   onUploadProgress,
 }) => {
   const formData = new FormData();
@@ -20,6 +21,11 @@ export const handleUploadImage = async ({
   formData.append("vehicleId", vehicleId);
   formData.append("labelId", labelId);
   formData.append("dealership", dealership);
+  
+  // Add weather parameter if provided
+  if (weather) {
+    formData.append("weather", weather);
+  }
 
   const { data } = await axios.post("/images", formData, {
     headers: {
@@ -40,6 +46,7 @@ const handlerUploadImage = async ({
   dealership,
   jwtToken,
   skipBGRemoval, // 0 = remove / replace BG, 1 = skip BG removal
+  weather,
   onUploadProgress,
 }) => {
   const formData = new FormData();
@@ -48,6 +55,12 @@ const handlerUploadImage = async ({
   formData.append("labelId", labelId);
   formData.append("dealership", dealership);
   formData.append("skipBGRemoval", skipBGRemoval.toString());
+  
+  // Add weather parameter if provided
+  if (weather) {
+    formData.append("weather", weather);
+  }
+  
   console.log("skipBGRemoval.toString", skipBGRemoval.toString());
   const { data } = await axios.post("/images", formData, {
     headers: {

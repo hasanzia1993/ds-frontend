@@ -14,6 +14,8 @@ import {
 import ImageCaptureInstructionCard from "../components/ImageCaptureInstructionCard";
 import CameraCaptureScreen from "../components/CameraCaptureScreen";
 import CameraCapturePreviewScreen from "../components/CameraCapturePreviewScreen";
+import WeatherSelector from "../components/WeatherSelector";
+import WeatherIndicator from "../components/WeatherIndicator";
 import { isMobile as isMobileDevice, isTablet } from "react-device-detect";
 import DealershipContext from "../contexts/DealershipContext";
 import { handleUploadImage } from "../components/ImageUploader";
@@ -126,6 +128,8 @@ function VehicleDetail() {
   const [isLoadingLabels, setIsLoadingLabels] = useState(true); // loading state for labels
   const [isLoadingVehicle, setIsLoadingVehicle] = useState(false); // loading state for vehicle
   const [hasAutoTriggered, setHasAutoTriggered] = useState(false); // track if auto-capture was already triggered
+  const [selectedWeather, setSelectedWeather] = useState(null); // selected weather condition
+  const [showWeatherSelector, setShowWeatherSelector] = useState(false); // show weather selector
   const { selectedDealership } = useContext(DealershipContext);
 
   // Auto-trigger capture all photos on mobile landscape
@@ -137,9 +141,8 @@ function VehicleDetail() {
         const isLandscape = window.innerHeight < window.innerWidth;
         
         if (isLandscape && !selectedRecord && !isCapturing && !isPreviewing) {
-          // Auto-trigger capture all photos
-          setSelectedRecord(labels[0]);
-          setIsCapturing(false); // show instructions first
+          // Auto-trigger capture all photos - show weather selector first
+          setShowWeatherSelector(true);
           setHasAutoTriggered(true); // prevent multiple auto-triggers
         }
       }
@@ -891,8 +894,7 @@ function VehicleDetail() {
                     <ShadCNButton
                       onClick={() => {
                         if (labels.length > 0) {
-                          setSelectedRecord(labels[0]);
-                          setIsCapturing(false); // show instructions first
+                          setShowWeatherSelector(true);
                         }
                       }}
                       className="bg-primary text-primary-foreground hover:bg-primary/90 px-6"
@@ -907,8 +909,7 @@ function VehicleDetail() {
                     <ShadCNButton
                       onClick={() => {
                         if (labels.length > 0) {
-                          setSelectedRecord(labels[0]);
-                          setIsCapturing(false); // show instructions first
+                          setShowWeatherSelector(true);
                         }
                       }}
                       className="bg-primary text-primary-foreground hover:bg-primary/90 px-6"
@@ -1178,6 +1179,8 @@ function VehicleDetail() {
               labels.findIndex((label) => label.id === selectedRecord.id) + 1
             }
             totalShots={labels.length}
+            selectedWeather={selectedWeather}
+            onWeatherChange={setSelectedWeather}
             styles={{
               container: {
                 margin: 0,
@@ -1237,6 +1240,7 @@ function VehicleDetail() {
                   labelId: selectedRecord.id,
                   dealership: selectedDealership,
                   jwtToken,
+                  weather: selectedWeather,
                 });
 
                 message.success("Image uploaded successfully");
@@ -1680,6 +1684,45 @@ function VehicleDetail() {
           </small>
         </div>
       </Modal>
+
+      {/* Weather Selector Modal */}
+      {showWeatherSelector && (
+        <Modal
+          open={true}
+          footer={null}
+          closable={false}
+          onCancel={() => {
+            setShowWeatherSelector(false);
+            setSelectedRecord(null);
+            setHasAutoTriggered(false);
+          }}
+          width="100vw"
+          style={{
+            top: 0,
+            padding: 0,
+          }}
+          styles={{
+            body: {
+              padding: 0,
+              margin: 0,
+            },
+          }}
+          destroyOnClose
+        >
+          <WeatherSelector
+            selectedWeather={selectedWeather}
+            onWeatherSelect={(weather) => {
+              setSelectedWeather(weather);
+            }}
+            onContinue={() => {
+              setShowWeatherSelector(false);
+              setSelectedRecord(labels[0]);
+              setIsCapturing(false); // show instructions first
+            }}
+          />
+        </Modal>
+      )}
+
       {adjustingImage && (
         <Modal
           open={true}

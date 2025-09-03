@@ -4,6 +4,7 @@ import { Button, Typography, Slider } from "antd";
 import { openRearCamera } from "./RearCamera";
 import { PlusOutlined, MinusOutlined } from "@ant-design/icons";
 import { TiltIndicator } from "./TiltIndicator";
+import WeatherIndicator from "./WeatherIndicator";
 
 const { Text } = Typography;
 
@@ -18,12 +19,27 @@ const CameraCaptureScreen = ({
   isUploading,
   markerSrc,
   markerStyle,
+  selectedWeather,
+  onWeatherChange,
 }) => {
   const videoRef = useRef(null);
   const [capturedImage, setCapturedImage] = useState(null);
 
+  // Define the first 5 shot types that should have fixed zoom of 1.6
+  const fixedZoomShots = [
+    "Front Quarter Shot",
+    "Front Shot", 
+    "Side Shot",
+    "Back Quarter Shot",
+    "Back Shot"
+  ];
+
+  // Check if current shot should have fixed zoom
+  const shouldUseFixedZoom = fixedZoomShots.includes(shotType);
+  const fixedZoomValue = 1.6;
+
   // Zoom state (if you still need it)
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(shouldUseFixedZoom ? fixedZoomValue : 1);
   const [minZoom, setMinZoom] = useState(1);
   const [maxZoom, setMaxZoom] = useState(3);
   const [hwZoomSupported, setHwZoomSupported] = useState(false);
@@ -101,7 +117,10 @@ const CameraCaptureScreen = ({
         const track = stream.getVideoTracks()[0];
         const caps = track.getCapabilities();
         if (caps.zoom && track.applyConstraints) {
-          const initZoom = Math.min(Math.max(1, caps.zoom.min), caps.zoom.max);
+          // Use fixed zoom for first 5 shots, otherwise use default
+          const initZoom = shouldUseFixedZoom 
+            ? Math.min(Math.max(fixedZoomValue, caps.zoom.min), caps.zoom.max)
+            : Math.min(Math.max(1, caps.zoom.min), caps.zoom.max);
           setMinZoom(caps.zoom.min);
           setMaxZoom(3);
           setZoom(initZoom);
@@ -118,6 +137,19 @@ const CameraCaptureScreen = ({
     })();
     return () => activeStream?.getTracks().forEach((t) => t.stop());
   }, []);
+
+  // Handle zoom changes when shot type changes
+  useEffect(() => {
+    if (hwZoomSupported && videoRef.current) {
+      const video = videoRef.current;
+      const track = video.srcObject?.getVideoTracks()[0];
+      if (track) {
+        const targetZoom = shouldUseFixedZoom ? fixedZoomValue : 1;
+        setZoom(targetZoom);
+        handleZoomCommit(targetZoom);
+      }
+    }
+  }, [shotType, hwZoomSupported, shouldUseFixedZoom, fixedZoomValue]);
 
   useEffect(() => {
     const requestPermission = async () => {
@@ -202,7 +234,7 @@ const CameraCaptureScreen = ({
         >
           ←
         </Button>
-        {!capturedImage && (
+        {!capturedImage && !shouldUseFixedZoom && (
           <div
             style={{
               display: "flex",
@@ -411,13 +443,19 @@ const CameraCaptureScreen = ({
           padding: "16px 16px",
         }}
       >
-        <Button
-          type="text"
-          onClick={onExampleClick}
-          style={{ color: "#f5c518", fontWeight: "bold", padding: 0 }}
-        >
-          EXAMPLE
-        </Button>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+          <Button
+            type="text"
+            onClick={onExampleClick}
+            style={{ color: "#f5c518", fontWeight: "bold", padding: 0 }}
+          >
+            EXAMPLE
+          </Button>
+          <WeatherIndicator 
+            selectedWeather={selectedWeather}
+            onWeatherChange={onWeatherChange}
+          />
+        </div>
         <Button
           color="danger"
           shape="circle"

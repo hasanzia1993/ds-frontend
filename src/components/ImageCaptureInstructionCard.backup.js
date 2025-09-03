@@ -6,8 +6,6 @@ import { Button as ShadCNButton } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Camera, SkipForward } from "lucide-react";
 
-// No imports needed - we'll use require() for static images
-
 const { Title, Text } = Typography;
 
 function ImageCaptureInstructionCard({
@@ -21,37 +19,41 @@ function ImageCaptureInstructionCard({
   onSkip,
 }) {
   const getExampleImage = (shotType) => {
-    // Map shot types to static image files using require()
     const mapping = {
-      "Front Quarter Shot": require("../assets/shot_images/front_quarter.jpg"),
-      "Front Shot": require("../assets/shot_images/front.jpg"),
-      "Side Shot": require("../assets/shot_images/side.jpg"),
-      "Back Quarter Shot": require("../assets/shot_images/back_quarter.jpg"),
-      "Back Shot": require("../assets/shot_images/back.jpg"),
-      "Wheel Shot": require("../assets/shot_images/wheel.jpg"),
-      "Tire Tread Shot": require("../assets/shot_images/tire_tread.jpg"),
-      "Head Light Shot": require("../assets/shot_images/head_light.jpg"),
-      "Emblem Shot": require("../assets/shot_images/emblem.jpg"),
-      "Engine Shot": require("../assets/shot_images/engine.jpg"),
-      "Tail light Shot": require("../assets/shot_images/tail_light.jpg"),
-      "Trunk Shot": require("../assets/shot_images/trunk.jpg"),
-      "Side Dash Shot": require("../assets/shot_images/side_dash.jpg"),
-      "Steering Wheel Shot": require("../assets/shot_images/steering_wheel.jpg"),
-      "Guages Shot": require("../assets/shot_images/gauges.jpg"),
-      "Steering Buttons Shot": require("../assets/shot_images/steering_buttons.jpg"),
-      "Door Shot": require("../assets/shot_images/door.jpg"),
-      "Shifter Shot": require("../assets/shot_images/shifter.jpg"),
-      "Centre Dash Shot": require("../assets/shot_images/centre_dash.jpg"),
-      "Fabric Shot": require("../assets/shot_images/fabric.jpg"),
-      "Rear Mirror Shot": require("../assets/shot_images/rear_mirror.jpg"),
-      "Passanger Cabin Shot": require("../assets/shot_images/passenger_cabin.jpg"),
-      "Back Seat Shot": require("../assets/shot_images/back_seat.jpg"),
-      "Panoramic Shot": require("../assets/shot_images/panoramic.jpg"),
-      "Passanger Seat Shot": require("../assets/shot_images/passenger_seat.jpg"),
+      "Front Quarter Shot": "https://images.edealer.ca/13/77340/155937384.jpeg",
+      "Front Shot": "https://images.edealer.ca/13/77340/155937385.jpeg",
+      "Side Shot": "https://images.edealer.ca/13/77340/155937387.jpeg",
+      "Back Quarter Shot": "https://images.edealer.ca/13/77340/155937388.jpeg",
+      "Back Shot": "https://images.edealer.ca/13/77340/155937390.jpeg",
+      "Wheel Shot": "https://images.edealer.ca/13/77340/155937392.jpeg",
+      "Tire Tread Shot": "https://images.edealer.ca/13/77340/155937393.jpeg",
+      "Head Light Shot": "https://images.edealer.ca/13/77340/155937395.jpeg",
+      "Emblem Shot": "https://images.edealer.ca/13/77340/155937396.jpeg",
+      "Engine Shot": "https://images.edealer.ca/13/77340/155937398.jpeg",
+      "Tail light Shot": "https://images.edealer.ca/13/77340/155937400.jpeg",
+      "Trunk Shot": "https://images.edealer.ca/13/77340/155937401.jpeg",
+      "Side Dash Shot": "https://images.edealer.ca/13/77340/155937402.jpeg",
+      "Steering Wheel Shot":
+        "https://images.edealer.ca/13/77340/155937403.jpeg",
+      "Guages Shot": "https://images.edealer.ca/13/77340/155937405.jpeg",
+      "Steering Buttons Shot":
+        "https://images.edealer.ca/13/77340/155937406.jpeg",
+      "Door Shot": "https://images.edealer.ca/13/77340/155937408.jpeg",
+      "Shifter Shot": "https://images.edealer.ca/13/77340/155937409.jpeg",
+      "Centre Dash Shot": "https://images.edealer.ca/13/77340/155937410.jpeg",
+      "Fabric Shot": "https://images.edealer.ca/13/77340/155937412.jpeg",
+      "Rear Mirror Shot": "https://images.edealer.ca/13/77340/155937413.jpeg",
+      "Passanger Cabin Shot":
+        "https://images.edealer.ca/13/77340/155937414.jpeg",
+      "Back Seat Shot": "https://images.edealer.ca/13/77340/155937415.jpeg",
+      "Panoramic Shot": "https://images.edealer.ca/13/77340/155937417.jpeg",
+      "Passanger Seat Shot":
+        "https://images.edealer.ca/13/77340/155937418.jpeg",
     };
-    
-    // Return the static image, or a fallback if the image doesn't exist
-    return mapping[shotType] || require("../assets/shot_images/front.jpg");
+    return (
+      mapping[shotType] ||
+      "https://cdn-icons-png.flaticon.com/512/10157/10157938.png"
+    );
   };
 
   const imageUrl = exampleImage || getExampleImage(shotType);
@@ -233,7 +235,20 @@ function ImageCaptureInstructionCard({
                   boxShadow: "0 20px 40px rgba(0, 0, 0, 0.3)",
                 }}
               />
-
+     {/* Blur patch pinned to top-left of the image box */}
+  <div
+    style={{
+      position: "absolute",
+      top: 52,
+      left: 0,
+      width: "86px",
+      height: "22px",
+      backdropFilter: "blur(6px)",
+      WebkitBackdropFilter: "blur(6px)", // Safari
+      borderTopLeftRadius: "12px", // optional to match image corner
+      pointerEvents: "none",
+    }}
+  />
             </div>
           </div>
         </Col>
