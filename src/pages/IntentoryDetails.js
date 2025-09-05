@@ -13,7 +13,7 @@ import {
 } from "@ant-design/icons";
 import ImageCaptureInstructionCard from "../components/ImageCaptureInstructionCard";
 import CameraCaptureScreen from "../components/CameraCaptureScreen";
-import CameraCapturePreviewScreen from "../components/CameraCapturePreviewScreen";
+
 import WeatherSelector from "../components/WeatherSelector";
 import WeatherIndicator from "../components/WeatherIndicator";
 import { isMobile as isMobileDevice, isTablet } from "react-device-detect";
@@ -110,10 +110,10 @@ function VehicleDetail() {
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [showRotateOverlay, setShowRotateOverlay] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [isPreviewing, setIsPreviewing] = useState(false);
+
   const [isUploading, setIsUploading] = useState(false);
   const [snapshot, setSnapshot] = useState(null);
-  const [viewExistingImage, setViewExistingImage] = useState(false);
+
   const [viewImageModal, setViewImageModal] = useState(false);
   const [selectedImagePath, setSelectedImagePath] = useState(null);
   const [isEnhancing, setIsEnhancing] = useState(-1);
@@ -123,6 +123,7 @@ function VehicleDetail() {
   const [deleting, setDeleting] = useState(false); // for delete button loading state
   const [isDeletingImage, setIsDeletingImage] = useState(null); // track specific image being deleted (imageId)
   const [selectedImageModal, setSelectedImageModal] = useState(null); // for image preview modal
+
   const [currentGalleryIndex, setCurrentGalleryIndex] = useState(0); // current shot index in gallery
   const [cachedLabels, setCachedLabels] = useState([]); // cached labels for faster loading
   const [isLoadingLabels, setIsLoadingLabels] = useState(true); // loading state for labels
@@ -130,7 +131,103 @@ function VehicleDetail() {
   const [hasAutoTriggered, setHasAutoTriggered] = useState(false); // track if auto-capture was already triggered
   const [selectedWeather, setSelectedWeather] = useState(null); // selected weather condition
   const [showWeatherSelector, setShowWeatherSelector] = useState(false); // show weather selector
+  const [shotStatuses, setShotStatuses] = useState({}); // track status of each shot
+  const [uploadingShots, setUploadingShots] = useState(new Set()); // track which shots are currently uploading
+  const [sessionId, setSessionId] = useState(null); // unique session identifier
   const { selectedDealership } = useContext(DealershipContext);
+
+  // Generate unique session ID when component mounts or vehicle changes
+  useEffect(() => {
+    const newSessionId = `${vehicleId}_${Date.now()}`;
+    setSessionId(newSessionId);
+    
+    // Clear completed statuses for new session, keep active ones
+    setShotStatuses(prev => {
+      const filtered = {};
+      Object.entries(prev).forEach(([shotType, status]) => {
+        if (status === 'uploading' || status === 'processing' || status === 'error') {
+          filtered[shotType] = status;
+        }
+        // 'completed' and 'empty' statuses are cleared for new session
+      });
+      return filtered;
+    });
+  }, [vehicleId]);
+
+  // Cleanup old statuses periodically to prevent memory leaks
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      setShotStatuses(prev => {
+        const now = Date.now();
+        const filtered = {};
+        
+        Object.entries(prev).forEach(([shotType, status]) => {
+          // Keep active statuses and completed ones
+          if (status === 'uploading' || status === 'processing' || status === 'error' || status === 'completed') {
+            filtered[shotType] = status;
+          }
+        });
+        
+        return filtered;
+      });
+    }, 60000); // Check every minute
+
+    return () => clearInterval(cleanupInterval);
+  }, []);
+
+  // Status management functions
+  const updateShotStatus = (shotType, status, sessionContext = null) => {
+    setShotStatuses(prev => ({
+      ...prev,
+      [shotType]: status
+    }));
+  };
+
+  const addUploadingShot = (shotType) => {
+    setUploadingShots(prev => new Set([...prev, shotType]));
+    updateShotStatus(shotType, 'uploading');
+  };
+
+  const removeUploadingShot = (shotType) => {
+    setUploadingShots(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(shotType);
+      return newSet;
+    });
+  };
+
+  // Clear completed statuses when user explicitly starts new capture session
+  const clearCompletedStatuses = () => {
+    setShotStatuses(prev => {
+      const filtered = {};
+      Object.entries(prev).forEach(([shotType, status]) => {
+        if (status !== 'completed') {
+          filtered[shotType] = status;
+        }
+      });
+      return filtered;
+    });
+    
+
+  };
+
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      // Clear completed statuses when leaving the component
+      setShotStatuses(prev => {
+        const filtered = {};
+        Object.entries(prev).forEach(([shotType, status]) => {
+          if (status === 'uploading' || status === 'processing' || status === 'error') {
+            filtered[shotType] = status;
+          }
+        });
+        return filtered;
+      });
+      
+
+    };
+  }, []);
 
   // Auto-trigger capture all photos on mobile landscape
   useEffect(() => {
@@ -140,7 +237,7 @@ function VehicleDetail() {
         // Check if in landscape orientation
         const isLandscape = window.innerHeight < window.innerWidth;
         
-        if (isLandscape && !selectedRecord && !isCapturing && !isPreviewing) {
+        if (isLandscape && !selectedRecord && !isCapturing) {
           // Auto-trigger capture all photos - show weather selector first
           setShowWeatherSelector(true);
           setHasAutoTriggered(true); // prevent multiple auto-triggers
@@ -165,7 +262,7 @@ function VehicleDetail() {
       window.removeEventListener('orientationchange', handleOrientationChange);
       window.removeEventListener('resize', handleOrientationChange);
     };
-  }, [isMobile, isTabletMode, labels, selectedRecord, isCapturing, isPreviewing, hasAutoTriggered]);
+  }, [isMobile, isTabletMode, labels, selectedRecord, isCapturing, hasAutoTriggered]);
 
   // Gallery navigation functions
   const openGallery = (label) => {
@@ -185,11 +282,6 @@ function VehicleDetail() {
 
   const getCurrentShot = () => {
     return labels[currentGalleryIndex];
-  };
-
-  const hasCurrentImage = () => {
-    const currentShot = getCurrentShot();
-    return currentShot?.Images && currentShot.Images.length > 0;
   };
 
   // Keyboard navigation
@@ -212,6 +304,13 @@ function VehicleDetail() {
       return () => document.removeEventListener('keydown', handleKeyPress);
     }
   }, [selectedImageModal, currentGalleryIndex]);
+
+  const hasCurrentImage = () => {
+    const currentShot = getCurrentShot();
+    return currentShot?.Images && currentShot.Images.length > 0;
+  };
+
+
 
   // Cache management functions
   const getCacheKey = () => `vehicle_${vehicleId}_labels`;
@@ -540,6 +639,7 @@ function VehicleDetail() {
   };
 
   const handleDeleteImage = (imageId, labelId) => {
+    console.log("Attempting to delete image:", { imageId, labelId });
     setIsDeletingImage(imageId); // Set loading state for this specific image
     
     axios
@@ -551,6 +651,25 @@ function VehicleDetail() {
             label.id === labelId ? { ...label, Images: [] } : label
           )
         );
+        
+        // Update selectedRecord if it's the same label being deleted
+        if (selectedRecord && selectedRecord.id === labelId) {
+          setSelectedRecord(prev => ({
+            ...prev,
+            Images: []
+          }));
+        }
+        
+        // Clear the shot status to allow capturing again
+        setShotStatuses(prev => {
+          const updated = { ...prev };
+          const shotType = labels.find(label => label.id === labelId)?.name;
+          if (shotType) {
+            delete updated[shotType];
+          }
+          return updated;
+        });
+        
         message.success("Image deleted successfully");
 
         return axios.get(`/labels`, {
@@ -606,8 +725,22 @@ function VehicleDetail() {
   };
 
   const dataURLtoFile = (dataUrl, filename) => {
+    // Validate input
+    if (!dataUrl || typeof dataUrl !== 'string') {
+      throw new Error('Invalid dataURL provided');
+    }
+
     const arr = dataUrl.split(",");
-    const mime = arr[0].match(/:(.*?);/)[1];
+    if (arr.length < 2) {
+      throw new Error('Invalid dataURL format');
+    }
+
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    if (!mimeMatch || !mimeMatch[1]) {
+      throw new Error('Invalid MIME type in dataURL');
+    }
+
+    const mime = mimeMatch[1];
     const bstr = atob(arr[1]);
     let n = bstr.length;
     const u8arr = new Uint8Array(n);
@@ -1174,13 +1307,40 @@ function VehicleDetail() {
             markerSrc={shotMarkers[selectedRecord.name]?.src}
             markerStyle={shotMarkers[selectedRecord.name]?.style}
             shotType={selectedRecord.name}
-            isUploading={isUploading}
             currentIndex={
               labels.findIndex((label) => label.id === selectedRecord.id) + 1
             }
             totalShots={labels.length}
             selectedWeather={selectedWeather}
             onWeatherChange={setSelectedWeather}
+            allShotTypes={labels.map(label => label.name)}
+            onShotTypeChange={(shotType, index) => {
+              const newRecord = labels[index];
+              if (newRecord) {
+                // Prevent rapid switching that could cause race conditions
+                if (uploadingShots.has(shotType)) {
+                  console.log('Shot is currently uploading, switching anyway...');
+                }
+                
+                // Clear any error state for the new shot to allow capturing
+                if (shotStatuses[shotType] === 'error') {
+                  console.log('Clearing error state for shot:', shotType);
+                  setShotStatuses(prev => {
+                    const updated = { ...prev };
+                    delete updated[shotType];
+                    return updated;
+                  });
+                }
+                
+                setSelectedRecord(newRecord);
+                setIsCapturing(true); // Go directly to camera capture for the new shot
+                
+
+              }
+            }}
+            shotStatuses={shotStatuses}
+            uploadingShots={uploadingShots}
+            selectedRecord={selectedRecord}
             styles={{
               container: {
                 margin: 0,
@@ -1195,68 +1355,94 @@ function VehicleDetail() {
               <div style={{ background: "#1a1a1a" }}>{node}</div>
             )}
             onCapture={async (imageData) => {
-              const file = dataURLtoFile(imageData, "snapshot.png");
+              let file;
+              try {
+                // Validate imageData before processing
+                if (!imageData) {
+                  throw new Error('No image data received from camera');
+                }
+
+                file = dataURLtoFile(imageData, "snapshot.png");
+              } catch (fileError) {
+                console.error('Error processing image data:', fileError);
+                message.error('Failed to process captured image. Please try again.');
+                return;
+              }
 
               try {
-                setIsUploading(true);
-                // Step 1: Delete all images associated with this label
-                const deleteAllImagesForLabel = async () => {
-                  let hasImages = true;
-
-                  while (hasImages) {
-                    // Refetch latest label data
-                    const res = await axios.get("/labels", {
-                      params: { vehicleId },
-                    });
-                    const updatedLabels = res.data.sort((a, b) => a.id - b.id);
-                    setLabels(updatedLabels); // update UI
-                    const label = updatedLabels.find(
-                      (l) => l.id === selectedRecord.id
-                    );
-
-                    const images = label?.Images || [];
-                    if (images.length > 0) {
-                      for (const img of images) {
-                        try {
-                          await axios.delete(`/images/${img.id}/${label.id}`);
-                          console.log(
-                            `Deleted image ${img.id} from label ${label.id}`
-                          );
-                        } catch (err) {
-                          console.warn(`Failed to delete image ${img.id}`, err);
-                        }
-                      }
-                    } else {
-                      hasImages = false; // all cleared
-                    }
+                // Set status to uploading immediately
+                updateShotStatus(selectedRecord.name, 'uploading');
+                addUploadingShot(selectedRecord.name);
+                
+                try {
+                  // Upload with progress tracking
+                  const formData = new FormData();
+                  formData.append("image", file);
+                  formData.append("vehicleId", vehicleId);
+                  formData.append("labelId", selectedRecord.id);
+                  formData.append("dealership", selectedDealership);
+                  if (selectedWeather) {
+                    formData.append("weather", selectedWeather);
                   }
-                };
 
-                await deleteAllImagesForLabel();
+                  const response = await axios.post("/images", formData, {
+                    headers: {
+                      "Content-Type": "multipart/form-data",
+                      Authorization: `Bearer ${jwtToken}`,
+                    },
+                    onUploadProgress: (progressEvent) => {
+                      const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                      console.log(`Upload progress: ${progress}%`);
+                      
+                      // Switch to processing as soon as upload reaches 100%
+                      if (progress === 100) {
+                        updateShotStatus(selectedRecord.name, 'processing');
+                        removeUploadingShot(selectedRecord.name);
+                      }
+                    },
+                  });
 
-                const imageUrl = await handleUploadImage({
-                  file,
-                  vehicleId,
-                  labelId: selectedRecord.id,
-                  dealership: selectedDealership,
-                  jwtToken,
-                  weather: selectedWeather,
-                });
+                  // Backend processing completed
+                  const imageData = response.data;
+                  console.log("Backend response data:", imageData);
+                  updateShotStatus(selectedRecord.name, 'completed');
+                  message.success("Image uploaded and processed successfully");
 
-                message.success("Image uploaded successfully");
+                  handleImageUploadSuccess(); // Refresh label list again after upload
+                  
+                  // Update UI with the complete uploaded image data
+                  // Ensure the image data has the correct structure
+                  const imageObject = {
+                    id: imageData.id || Date.now(), // fallback ID
+                    path: imageData.path || imageData.imageUrl,
+                    transparentPath: imageData.transparentPath || imageData.path || imageData.imageUrl, // Use original path as fallback
+                    xAxis: imageData.xAxis || 0,
+                    yAxis: imageData.yAxis || 0,
+                    scaleAdjustment: imageData.scaleAdjustment || 1.0, // Default scale of 1.0
+                    tiltAdjustment: imageData.tiltAdjustment || 0,
+                    ...imageData // spread any additional properties
+                  };
+                  
+                  console.log("Structured image object:", imageObject);
+                  
+                  setSelectedRecord((prev) => ({
+                    ...prev,
+                    Images: [imageObject],
+                  }));
 
-                handleImageUploadSuccess(); // Refresh label list again after upload
-                setSelectedRecord((prev) => ({
-                  ...prev,
-                  Images: [{ path: imageUrl }],
-                }));
-
-                setSnapshot(`${BACKEND_URL}/uploads${imageUrl}`);
-                setIsUploading(false);
-                setIsPreviewing(true);
+                  setSnapshot(`${BACKEND_URL}/uploads/${imageData.path || imageData.imageUrl}`);
+                } catch (error) {
+                  // Upload failed
+                  updateShotStatus(selectedRecord.name, 'error');
+                  removeUploadingShot(selectedRecord.name);
+                  message.error("Failed to upload image. You can try capturing again.");
+                  console.error("Upload error:", error);
+                  
+                  // Clear the captured image for this shot so user can retry
+                  // This will be handled by the shot-specific captured images logic
+                }
               } catch (err) {
                 message.error("Failed during image capture flow");
-                setIsUploading(false);
                 console.error(err);
               }
             }}
@@ -1279,10 +1465,67 @@ function VehicleDetail() {
               }
             }}
             onBack={() => {
-              setIsCapturing(false); // Go back to instruction modal
-            }}
-            onExampleClick={() => {
+              setSelectedRecord(null); // Go back to details page
               setIsCapturing(false);
+              setHasAutoTriggered(false); // reset auto-trigger flag
+            }}
+            onAdjust={() => {
+              if (selectedRecord?.Images?.[0]) {
+                const image = selectedRecord.Images[0];
+                console.log("Image data for adjustment:", image);
+                
+                // Check if image has the required properties for adjustment
+                // For newly uploaded images, we might need to provide default values
+                const hasRequiredData = image.scaleAdjustment != null && image.transparentPath != null;
+                const isNewlyUploaded = image.scaleAdjustment === undefined && image.transparentPath === undefined;
+                
+                if (hasRequiredData || isNewlyUploaded) {
+                  const imageId = image.image?.id || image.id;
+                  const transparentPath = image.image?.transparentPath || image.transparentPath || image.path;
+                  console.log("Sending to ImageAdjustor:", {
+                    imageId,
+                    transparentPath,
+                    originalPath: image.path,
+                    nestedTransparentPath: image.image?.transparentPath
+                  });
+                  setAdjustingImage({
+                    id: imageId,
+                    labelId: selectedRecord.id,
+                    path: image.image?.transparentPath || image.transparentPath || image.path, // Use transparent path for adjustment
+                    transparentPath: image.image?.transparentPath || image.transparentPath || image.path, // Use transparent path as fallback
+                    xAxis: image.image?.xAxis || image.xAxis || 0,
+                    yAxis: image.image?.yAxis || image.yAxis || 0,
+                    scaleAdjustment: image.image?.scaleAdjustment || image.scaleAdjustment || 1.0, // Default scale of 1.0
+                    tiltAdjustment: image.image?.tiltAdjustment || image.tiltAdjustment || 0,
+                  });
+                } else {
+                  console.error("Missing required adjustment data:", {
+                    scaleAdjustment: image.scaleAdjustment,
+                    transparentPath: image.transparentPath,
+                    xAxis: image.xAxis,
+                    yAxis: image.yAxis,
+                    tiltAdjustment: image.tiltAdjustment
+                  });
+                  message.error("Image adjustment not available - missing required data. Please try refreshing the page or re-uploading the image.");
+                }
+              } else {
+                message.error("No image found to adjust");
+              }
+            }}
+            onDelete={() => {
+              if (selectedRecord?.Images?.[0]) {
+                const imageId = selectedRecord.Images[0].image?.id || selectedRecord.Images[0].id;
+                handleDeleteImage(imageId, selectedRecord.id);
+              }
+            }}
+            isDeletingImage={isDeletingImage}
+            onShowInstructions={(shotType) => {
+              // Find the record for the shot type and show instructions
+              const record = labels.find(label => label.name === shotType);
+              if (record) {
+                setSelectedRecord(record);
+                setIsCapturing(false); // Show instructions instead of camera
+              }
             }}
           />
         </Modal>
@@ -1357,6 +1600,7 @@ function VehicleDetail() {
               }
               totalShots={labels.length}
               onStartShooting={() => {
+                clearCompletedStatuses(); // Clear completed statuses for new session
                 setIsCapturing(true);
               }}
               existingImage={
@@ -1365,7 +1609,7 @@ function VehicleDetail() {
                   : null
               }
               onViewExistingImage={() => {
-                setViewExistingImage(true);
+                // View existing image functionality removed
               }}
               onSkip={() => {
                 console.log("Skipped!");
@@ -1441,137 +1685,8 @@ function VehicleDetail() {
         </div>
       )}
 
-      {isPreviewing && snapshot && selectedRecord && (
-        <Modal
-          transitionName=""
-          open={true}
-          footer={null}
-          closable={false}
-          destroyOnClose
-          maskClosable={true}
-          centered
-          width="100vw"
-          styles={{
-            header: {
-              backgroundColor: "white",
-              padding: 16,
-              margin: 0,
-              borderBottom: "none",
-              color: "#fff",
-            },
-            content: {
-              display: "flex",
-              flexDirection: "column",
-              backgroundColor: "transparent",
-              boxShadow: "none",
-              padding: 0,
-            },
 
-            body: {
-              backgroundColor: "transparent",
-            },
-            mask: {
-              backgroundColor: "rgba(0, 0, 0, 0.95)",
-            },
-          }}
-        >
-          <CameraCapturePreviewScreen
-            imageData={snapshot}
-            shotType={selectedRecord.name}
-            currentIndex={selectedRecord.id}
-            totalShots={labels.length}
-            onAdjust={() => {
-              //find the label
-              const label = labels.find(
-                (label) => label.id === selectedRecord.id
-              );
-              console.log("Label found:", label);
-              setAdjustingImage(label?.Images[0]);
-            }}
-            onRetake={() => {
-              setIsPreviewing(false);
-              setSnapshot(null);
-              setIsCapturing(true); // back to camera
-            }}
-            onContinue={() => {
-              const currentIndex = labels.findIndex(
-                (label) => label.id === selectedRecord.id
-              );
-              const nextRecord = labels[currentIndex + 1];
 
-              setIsPreviewing(false);
-              setSnapshot(null);
-
-              if (nextRecord) {
-                setSelectedRecord(nextRecord); // go to next
-                setIsCapturing(false);
-              } else {
-                setSelectedRecord(null);
-              setHasAutoTriggered(false); // reset auto-trigger flag // done
-              }
-            }}
-            onExit={() => {
-              if (document.fullscreenElement && document.exitFullscreen) {
-                document.exitFullscreen();
-              }
-              setIsPreviewing(false);
-              setSnapshot(null);
-              setIsCapturing(false);
-              setSelectedRecord(null);
-              setHasAutoTriggered(false); // reset auto-trigger flag
-            }}
-          />
-        </Modal>
-      )}
-      {/* Existing image preview modal */}
-      <Modal
-        open={viewExistingImage}
-        title={`Existing Image for ${selectedRecord?.name}`}
-        footer={null}
-        onCancel={() => setViewExistingImage(false)}
-        centered
-        closable={true}
-        maskClosable={false}
-        destroyOnClose
-        styles={{
-          header: {
-            padding: 16,
-            margin: 0,
-            borderBottom: "none",
-          },
-          body: {
-            backgroundColor: "transparent",
-          },
-          content: {
-            backgroundColor: "transparent",
-            boxShadow: "none",
-            padding: 0,
-          },
-          mask: {
-            backgroundColor: "rgba(0, 0, 0, 0.95)",
-          },
-        }}
-      >
-        {selectedRecord?.Images?.[0]?.path ? (
-          <div className="relative w-full h-full">
-            <img
-              alt="Existing Shot"
-              src={`${BACKEND_URL}/uploads/${selectedRecord.Images[0].path}`}
-              style={{ width: "100%", height: "100%", borderRadius: 0 }}
-            />
-            {/* Delete spinner overlay */}
-            {isDeletingImage === selectedRecord.Images[0].id && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                <Loader2 className="h-12 w-12 animate-spin text-white" />
-              </div>
-            )}
-          </div>
-        ) : (
-          <p style={{ color: "#fff", textAlign: "center" }}>
-            No image available.
-          </p>
-        )}
-      </Modal>
       <Modal
         open={viewImageModal}
         footer={null}
@@ -1751,20 +1866,28 @@ function VehicleDetail() {
             onSaveSuccess={async () => {
               console.log("path before getting labels", adjustingImage?.path);
               const newLabels = await getLabels();
-              if (isPreviewing) {
-                console.log("Saving image after adjustment");
-                // setSnapshot("/loader.webp");
-                //find the label
-                const label = newLabels.find(
-                  (label) => label.id === selectedRecord.id
-                );
-                console.log("Label found:", label.Images[0]?.path);
-                console.log(label.Images[0]?.path);
-                setSnapshot(null);
-
-                setSnapshot(`${BACKEND_URL}/uploads/${label.Images[0]?.path}`);
-                setTimeout(() => {}, 1000); // wait for the image to be saved
+              // Image adjustment completed
+              console.log("Saving image after adjustment");
+              
+              // Find the updated label with new image data
+              const updatedLabel = newLabels.find(
+                (label) => label.id === selectedRecord.id
+              );
+              
+              if (updatedLabel && updatedLabel.Images && updatedLabel.Images[0]) {
+                console.log("Updated label found:", updatedLabel.Images[0]?.path);
+                
+                // Update the selectedRecord with the new image data
+                setSelectedRecord(prev => ({
+                  ...prev,
+                  Images: updatedLabel.Images
+                }));
+                
+                // Update snapshot for other components
+                setSnapshot(`${BACKEND_URL}/uploads/${updatedLabel.Images[0]?.path}`);
               }
+              
+              setAdjustingImage(null); // Close the adjustor modal
             }}
           />
         </Modal>

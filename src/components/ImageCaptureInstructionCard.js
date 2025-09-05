@@ -1,6 +1,6 @@
 import React from "react";
 import { Button, Typography, Row, Col, Modal } from "antd";
-import { CameraOutlined } from "@ant-design/icons";
+import { CameraOutlined, EditFilled } from "@ant-design/icons";
 import { Card, CardContent } from "./ui/card";
 import { Button as ShadCNButton } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -18,6 +18,7 @@ function ImageCaptureInstructionCard({
   onStartShooting,
   existingImage,
   onViewExistingImage,
+  onDelete,
   onSkip,
 }) {
   const getExampleImage = (shotType) => {
@@ -92,6 +93,8 @@ function ImageCaptureInstructionCard({
   };
 
   const instructions = getInstructions(shotType);
+
+  // Always show normal instructions layout
 
   return (
     <div
@@ -182,7 +185,7 @@ function ImageCaptureInstructionCard({
               </ShadCNButton>
             </div>
           </div>
-          {existingImage && (
+          {/* {existingImage && (
               <div className="p-3 bg-amber-900/30 border border-amber-600/50 rounded-lg mt-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
@@ -202,7 +205,7 @@ function ImageCaptureInstructionCard({
                   </ShadCNButton>
                 </div>
               </div>
-            )}
+            )} */}
         </Col>
 
         {/* Right Column */}

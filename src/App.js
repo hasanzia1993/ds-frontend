@@ -16,6 +16,7 @@ import { auth } from "./firebase";
 
 import NavBar from "./components/NavBar";
 import ScrollToTop from "./components/ScrollToTop";
+import PWAInstallBanner from "./components/PWAInstallBanner";
 import VehicleList from "./pages/InventoryList";
 import VehicleDetail from "./pages/IntentoryDetails";
 import StatsUsage from "./pages/StatsUsage";
@@ -133,6 +134,7 @@ function App() {
 
     return (
       <div className="min-h-screen bg-background text-foreground dark:bg-background">
+        <PWAInstallBanner />
         {showNavBar && <NavBar />}
         <Outlet />
       </div>

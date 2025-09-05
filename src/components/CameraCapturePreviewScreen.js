@@ -8,21 +8,11 @@ const CameraCapturePreviewScreen = ({
   imageData,
   onRetake,
   onContinue,
-  onExit,
   shotType,
   currentIndex,
   totalShots,
   onAdjust,
 }) => {
-  const handleExit = () => {
-    Modal.confirm({
-      title: "Exit Preview?",
-      content: "Are you sure you want to exit the preview?",
-      okText: "Yes",
-      cancelText: "No",
-      onOk: onExit,
-    });
-  };
 
   const handleRetake = () => {
     Modal.confirm({
@@ -99,30 +89,6 @@ const CameraCapturePreviewScreen = ({
           padding: 16,
         }}
       >
-        <Button
-          danger
-          type="text"
-          onClick={handleExit}
-          style={{ backgroundColor: "transparent" }}
-        >
-          Exit
-        </Button>
-
-        <Button
-          type="default"
-          onClick={onContinue}
-          icon={<CheckOutlined style={{ color: "#fff" }} />}
-          style={{
-            background: "linear-gradient(135deg, #00C6FF 0%, #0072FF 100%)",
-            border: "none",
-            borderRadius: "50%",
-            width: "56px",
-            height: "56px",
-            boxShadow: "0 4px 12px rgba(0, 114, 255, 0.4)",
-            transition: "all 0.3s ease",
-          }}
-        />
-
         {currentIndex <= 5 && (
           <Button
             type="primary"
@@ -133,6 +99,21 @@ const CameraCapturePreviewScreen = ({
             Adjust
           </Button>
         )}
+
+        <Button
+          type="default"
+          onClick={onContinue}
+          icon={<CheckOutlined style={{ color: "#fff" }} />}
+          style={{
+            background: "linear-gradient(135deg, #00D084 0%, #00A86B 100%)",
+            border: "none",
+            borderRadius: "50%",
+            width: "56px",
+            height: "56px",
+            boxShadow: "0 4px 12px rgba(0, 168, 107, 0.4)",
+            transition: "all 0.3s ease",
+          }}
+        />
         <Button
           type="text"
           onClick={handleRetake}

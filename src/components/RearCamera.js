@@ -1,7 +1,7 @@
 // rearCamera.js
 const PRESETS = [
-  // { width: 3840, height: 2880 }, // 4K+ (4:3)
-  // { width: 3200, height: 2400 }, // QUXGA
+  { width: 3840, height: 2880 }, // 4K+ (4:3)
+  { width: 3200, height: 2400 }, // QUXGA
   { width: 2560, height: 1920 }, // QXGA
   { width: 2048, height: 1536 }, // QXGA (Apple iPad 3+)
   { width: 1920, height: 1440 }, // 4:3 Full HD+

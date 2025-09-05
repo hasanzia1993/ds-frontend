@@ -69,7 +69,10 @@ const WeatherSelector = ({ onWeatherSelect, selectedWeather, onContinue }) => {
                 justifyContent: "center",
                 alignItems: "center",
               }}
-              onClick={() => onWeatherSelect(weather.key)}
+              onClick={() => {
+                onWeatherSelect(weather.key);
+                onContinue();
+              }}
               hoverable
             >
               <CardContent style={{ textAlign: "center", padding: "20px" }}>
@@ -99,16 +102,7 @@ const WeatherSelector = ({ onWeatherSelect, selectedWeather, onContinue }) => {
         ))}
       </Row>
 
-      {selectedWeather && (
-        <div style={{ marginTop: "40px" }}>
-          <ShadCNButton
-            onClick={onContinue}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 px-8 py-3 text-lg"
-          >
-            Continue with {weatherOptions.find(w => w.key === selectedWeather)?.label}
-          </ShadCNButton>
-        </div>
-      )}
+
     </div>
   );
 };
