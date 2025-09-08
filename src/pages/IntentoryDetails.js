@@ -1374,6 +1374,21 @@ function VehicleDetail() {
                 updateShotStatus(selectedRecord.name, 'uploading');
                 addUploadingShot(selectedRecord.name);
                 
+                // Automatically move to next shot's instructions immediately after starting upload (unless it's the last shot)
+                const currentIndex = labels.findIndex(
+                  (label) => label.id === selectedRecord.id
+                );
+                const nextRecord = labels[currentIndex + 1]; // Get the next record
+
+                if (nextRecord) {
+                  // Move to next shot's instructions immediately
+                  setSelectedRecord(nextRecord);
+                  setIsCapturing(false); // Show instructions for next shot
+                } else {
+                  // This was the last shot, stay on current shot showing upload progress
+                  console.log("Last shot - staying on current shot to show upload progress");
+                }
+                
                 try {
                   // Upload with progress tracking
                   const formData = new FormData();

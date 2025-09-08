@@ -14,7 +14,7 @@ import {
 } from "@ant-design/icons";
 import axios from "../axiosInstance";
 import { openRearCamera } from "../components/RearCamera";
-import { BACKEND_URL } from "../constants";
+import { BACKEND_URL, BACKGROUND_HEIGHT, BACKGROUND_WIDTH } from "../constants";
 
 const ImageAdjustor = ({
   imageId,
@@ -51,8 +51,7 @@ const ImageAdjustor = ({
   const [saving, setSaving] = useState(false);
   const [forceLandscape, setForceLandscape] = useState(false);
 
-  const BACKGROUND_WIDTH = 1024;
-  const BACKGROUND_HEIGHT = 768;
+
   const isMobile = isMobileDevice || isTablet;
   const [showSlider, setShowSlider] = useState(!isMobile);
 
@@ -233,8 +232,8 @@ const ImageAdjustor = ({
     if (!videoRef.current) return;
 
     const canvas = document.createElement("canvas");
-    canvas.width = 1024;
-    canvas.height = 768;
+    canvas.width = BACKGROUND_WIDTH;
+    canvas.height = BACKGROUND_HEIGHT;
 
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = true;

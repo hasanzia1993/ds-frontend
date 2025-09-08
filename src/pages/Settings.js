@@ -28,12 +28,15 @@ import {
   Plus,
   Copy,
   Image as ImageIcon,
-  X
+  X,
+  Edit3,
+  Toggle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { BACKEND_URL } from '../constants';
+import { BACKEND_URL, BACKGROUND_HEIGHT, BACKGROUND_WIDTH } from '../constants';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
+import BrandingTab from '../components/settings/BrandingTab';
 
   // Custom slider styles
   const sliderStyles = `
@@ -107,6 +110,11 @@ function Settings() {
   const [vehicleSamples, setVehicleSamples] = useState([]);
   const [selectedSample, setSelectedSample] = useState(null);
   const [activeShot, setActiveShot] = useState('frontQuarter');
+  
+  // Sample backgrounds state
+  const [sampleBackgrounds, setSampleBackgrounds] = useState([]);
+  const [selectedBackground, setSelectedBackground] = useState(null);
+  const [fetchingBackgrounds, setFetchingBackgrounds] = useState(false);
 
   // Dealership data state
   const [dealershipData, setDealershipData] = useState({
@@ -128,9 +136,20 @@ function Settings() {
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
   const containerRef = useRef(null);
   const imageRef = useRef(null);
+  const editCanvasRef = useRef(null);
 
   // Add state for active tab
-  const [activeTab, setActiveTab] = useState('studio');
+  const [activeTab, setActiveTab] = useState('branding');
+  
+  // Edit mode state for Studio
+  const [editMode, setEditMode] = useState(false);
+  const [showVehicleInEdit, setShowVehicleInEdit] = useState(false);
+  const [studioLogo, setStudioLogo] = useState(null);
+  const [studioLogoPosition, setStudioLogoPosition] = useState({ x: 50, y: 50 });
+  const [studioLogoSize, setStudioLogoSize] = useState(50);
+  const [isDraggingStudioLogo, setIsDraggingStudioLogo] = useState(false);
+  const [studioLogoDragStart, setStudioLogoDragStart] = useState({ x: 0, y: 0 });
+  const [backgroundRefreshKey, setBackgroundRefreshKey] = useState(0);
   
   // License plate logo state
   const [uploadedLogo, setUploadedLogo] = useState(null);
@@ -390,9 +409,239 @@ function Settings() {
     };
   }, [isDraggingLogo, logoDragStart, logoPosition]);
 
+  // Studio logo drag handling
+  const handleStudioLogoDragStart = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsDraggingStudioLogo(true);
+    
+    // Use the edit canvas ref instead of document.querySelector
+    const container = editCanvasRef.current;
+    if (!container) return;
+    
+    const rect = container.getBoundingClientRect();
+    const clientX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
+    const clientY = e.type === 'mousedown' ? e.clientY : e.touches[0].clientY;
+    
+    // Store relative position from container, not absolute mouse position
+    setStudioLogoDragStart({
+      x: clientX - rect.left,
+      y: clientY - rect.top
+    });
+  };
+
+  // Studio logo dragging effect
+  useEffect(() => {
+    const handleStudioLogoMouseMove = (e) => {
+      if (!isDraggingStudioLogo) return;
+      
+      const container = editCanvasRef.current;
+      if (!container) return;
+      
+      const rect = container.getBoundingClientRect();
+      const clientX = e.clientX;
+      const clientY = e.clientY;
+      
+      // Calculate the current mouse position relative to container as percentage
+      const newX = ((clientX - rect.left) / rect.width) * 100;
+      const newY = ((clientY - rect.top) / rect.height) * 100;
+      
+      // Constrain to container bounds with padding
+      const constrainedX = Math.max(5, Math.min(95, newX));
+      const constrainedY = Math.max(5, Math.min(95, newY));
+      
+      setStudioLogoPosition({ x: constrainedX, y: constrainedY });
+    };
+
+    const handleStudioLogoTouchMove = (e) => {
+      if (!isDraggingStudioLogo) return;
+      e.preventDefault();
+      
+      const container = editCanvasRef.current;
+      if (!container) return;
+      
+      const rect = container.getBoundingClientRect();
+      const touch = e.touches[0];
+      const clientX = touch.clientX;
+      const clientY = touch.clientY;
+      
+      // Calculate the current touch position relative to container as percentage
+      const newX = ((clientX - rect.left) / rect.width) * 100;
+      const newY = ((clientY - rect.top) / rect.height) * 100;
+      
+      // Constrain to container bounds with padding
+      const constrainedX = Math.max(5, Math.min(95, newX));
+      const constrainedY = Math.max(5, Math.min(95, newY));
+      
+      setStudioLogoPosition({ x: constrainedX, y: constrainedY });
+    };
+
+    const handleStudioLogoEnd = () => {
+      setIsDraggingStudioLogo(false);
+    };
+
+    if (isDraggingStudioLogo) {
+      document.addEventListener('mousemove', handleStudioLogoMouseMove);
+      document.addEventListener('mouseup', handleStudioLogoEnd);
+      document.addEventListener('touchmove', handleStudioLogoTouchMove, { passive: false });
+      document.addEventListener('touchend', handleStudioLogoEnd);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleStudioLogoMouseMove);
+      document.removeEventListener('mouseup', handleStudioLogoEnd);
+      document.removeEventListener('touchmove', handleStudioLogoTouchMove);
+      document.removeEventListener('touchend', handleStudioLogoEnd);
+    };
+  }, [isDraggingStudioLogo, studioLogoDragStart, studioLogoPosition]);
+
+  // Save composite image with logo on background
+  const handleSaveComposite = async (shotType) => {
+    if (!studioLogo || !dealershipData.backgrounds[shotType]) {
+      setError('Logo and background are required to save composite');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      
+      console.log('Current background before save:', dealershipData.backgrounds[shotType]);
+      
+      // Create canvas for composite
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      // canvas.width = 2048;
+      // canvas.height = 1536;
+    canvas.width = BACKGROUND_WIDTH;
+    canvas.height = BACKGROUND_HEIGHT;
+      // Load background image
+      const backgroundImg = new Image();
+      backgroundImg.crossOrigin = 'anonymous';
+      
+      await new Promise((resolve, reject) => {
+        backgroundImg.onload = resolve;
+        backgroundImg.onerror = reject;
+        
+        // Use clean background for compositing if available, otherwise use saved background
+        const cleanBackgroundUrl = getCleanBackgroundImageUrl(shotType);
+        console.log('cleanBackgroundUrl:', cleanBackgroundUrl);
+        if (cleanBackgroundUrl) {
+          backgroundImg.src = cleanBackgroundUrl;
+        } else {
+          console.log('No clean background url, using saved background');
+          const backgroundFilename = getBackgroundFilename(dealershipData.backgrounds[shotType]);
+          backgroundImg.src = `${BACKEND_URL}/uploads/backgrounds/${backgroundFilename}`;
+        }
+      });
+      
+      // Draw background
+      ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height);
+      
+      // Load and draw logo
+      const logoImg = new Image();
+      logoImg.crossOrigin = 'anonymous';
+      
+      await new Promise((resolve, reject) => {
+        logoImg.onload = resolve;
+        logoImg.onerror = reject;
+        logoImg.src = studioLogo.url;
+      });
+      
+      // Calculate logo position and size on canvas
+      const logoCanvasX = (studioLogoPosition.x / 100) * canvas.width;
+      const logoCanvasY = (studioLogoPosition.y / 100) * canvas.height;
+      const logoCanvasSize = studioLogoSize * (canvas.width / 800); // Scale relative to display size
+      
+      // Maintain aspect ratio for logo
+      const logoAspectRatio = logoImg.width / logoImg.height;
+      let logoWidth = logoCanvasSize;
+      let logoHeight = logoCanvasSize / logoAspectRatio;
+      
+      // Draw logo centered at position
+      ctx.drawImage(
+        logoImg,
+        logoCanvasX - logoWidth / 2,
+        logoCanvasY - logoHeight / 2,
+        logoWidth,
+        logoHeight
+      );
+      
+      // Convert to blob and upload
+      const blob = await new Promise(resolve => {
+        canvas.toBlob(resolve, 'image/jpeg', 0.9);
+      });
+      
+      const formData = new FormData();
+      formData.append('background', blob, `${shotType}_with_logo.jpg`);
+      
+      const response = await axiosInstance.post(
+        `/dealerships/${dealershipData.id}/backgrounds/${shotType}`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+      
+      // Update background data
+      const { background, dealershipBackgrounds } = response.data;
+      
+      console.log('Save composite response:', response.data);
+      console.log('New background for', shotType, ':', background);
+      console.log('Dealership backgrounds from response:', dealershipBackgrounds);
+      
+      setDealershipData(prevData => ({
+        ...prevData,
+        backgrounds: dealershipBackgrounds || {
+          ...prevData.backgrounds,
+          [shotType]: background
+        }
+      }));
+      
+      // Force background image refresh by incrementing refresh key
+      setBackgroundRefreshKey(prev => prev + 1);
+      
+      // Exit edit mode
+      setEditMode(false);
+      setStudioLogo(null);
+      setShowVehicleInEdit(false);
+      
+      const shotLabel = shotTypes.find(s => s.key === shotType)?.label || shotType;
+      setSuccess(`Background with logo saved for ${shotLabel}`);
+      setTimeout(() => setSuccess(null), 3000);
+      
+      // Explicitly persist the dealership data after composite save
+      setTimeout(async () => {
+        try {
+          console.log('Auto-persisting dealership data after composite save...');
+          const updateData = {
+            backgrounds: dealershipBackgrounds || {
+              ...dealershipData.backgrounds,
+              [shotType]: background
+            },
+            adjustments: dealershipData.adjustments
+          };
+          
+          console.log('Auto-save - sending backgrounds:', updateData.backgrounds);
+          await axiosInstance.put(`/dealerships/${dealershipData.id}`, updateData);
+          console.log('Dealership data auto-persisted successfully');
+        } catch (error) {
+          console.error('Error auto-persisting dealership data:', error);
+        }
+      }, 1000); // Wait 1 second to ensure state is updated
+      
+    } catch (error) {
+      console.error('Error saving composite:', error);
+      setError('Failed to save composite image');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Canvas dimensions (matching ImageAdjustor)
-  const BACKGROUND_WIDTH = 1024;
-  const BACKGROUND_HEIGHT = 768;
+
 
   // Shot types configuration
   const shotTypes = [
@@ -402,6 +651,50 @@ function Settings() {
     { key: 'backQuarter', label: 'Back Quarter' },
     { key: 'back', label: 'Back' }
   ];
+
+  // Fetch sample backgrounds
+  const fetchSampleBackgrounds = async () => {
+    try {
+      setFetchingBackgrounds(true);
+      const response = await axiosInstance.get('/backgrounds');
+      setSampleBackgrounds(response.data || []);
+      return response;
+    } catch (error) {
+      console.error('Error fetching sample backgrounds:', error);
+      setSampleBackgrounds([]);
+      throw error;
+    } finally {
+      setFetchingBackgrounds(false);
+    }
+  };
+
+  // Handle sample background selection
+  const handleBackgroundSelection = (background) => {
+    setSelectedBackground(background);
+    
+    // Set background for all shots using the background's shot-specific images
+    const newBackgrounds = {};
+    shotTypes.forEach(shot => {
+      const shotUrl = background[`${shot.key}Url`];
+      if (shotUrl) {
+        // Extract filename from URL (remove /bg/backgrounds/ prefix)
+        const filename = shotUrl.replace('/bg/backgrounds/', '');
+        newBackgrounds[shot.key] = filename;
+      }
+    });
+    
+    // Update dealership data
+    setDealershipData(prev => ({
+      ...prev,
+      backgrounds: {
+        ...prev.backgrounds,
+        ...newBackgrounds
+      }
+    }));
+    
+    console.log('Selected background:', background.name);
+    console.log('Set backgrounds for all shots:', newBackgrounds);
+  };
 
   // Initialize data
   useEffect(() => {
@@ -415,9 +708,10 @@ function Settings() {
       setError(null);
 
       try {
-        const [samplesResponse, dealershipDataResult] = await Promise.all([
+        const [samplesResponse, dealershipDataResult, backgroundsResponse] = await Promise.all([
           axiosInstance.get('/vehicles/samples'),
-          getDealershipData()
+          getDealershipData(),
+          fetchSampleBackgrounds()
         ]);
 
         setVehicleSamples(samplesResponse.data || []);
@@ -593,7 +887,8 @@ function Settings() {
         backgrounds: dealershipBackgrounds
       }));
 
-      setSuccess(`Background uploaded for ${shotTypes.find(s => s.key === shotType)?.label}`);
+      const uploadShotLabel = shotTypes.find(s => s.key === shotType)?.label || shotType;
+      setSuccess(`Background uploaded for ${uploadShotLabel}`);
       
       // Close modals
       setShowCropModal(false);
@@ -636,7 +931,8 @@ function Settings() {
         }
       }));
 
-      setSuccess(`Background and positioning copied to ${shotTypes.find(s => s.key === currentShotForUpload)?.label}`);
+      const copyShotLabel = shotTypes.find(s => s.key === currentShotForUpload)?.label || currentShotForUpload;
+      setSuccess(`Background and positioning copied to ${copyShotLabel}`);
       setShowCopyModal(false);
       
     } catch (err) {
@@ -825,8 +1121,7 @@ function Settings() {
     const scaleAdjustment = getCurrentPosition().scale;
     
     // Use the same logic as ImageAdjustor
-    const BACKGROUND_WIDTH = 1024;
-    const BACKGROUND_HEIGHT = 768;
+
     
     // Calculate canvasScale like ImageAdjustor does
     const canvasScale = Math.min(
@@ -859,11 +1154,30 @@ function Settings() {
     return selectedSample.images.find(img => img.viewType === activeShot);
   };
 
+  // Helper function to extract filename from background data
+  const getBackgroundFilename = (background) => {
+    if (!background) return null;
+    return typeof background === 'object' ? background.filename : background;
+  };
+
   // Get background image URL
   const getBackgroundImageUrl = () => {
     const background = dealershipData.backgrounds[activeShot];
-    if (!background) return null;
-    return `${BACKEND_URL}/uploads/backgrounds/${background}`;
+    const filename = getBackgroundFilename(background);
+    if (!filename) return null;
+    // Add refresh key to prevent caching issues after composite save
+    return `${BACKEND_URL}/uploads/backgrounds/${filename}?v=${backgroundRefreshKey}`;
+  };
+
+  // Get clean background image URL for edit mode (always returns the original background, not composite)
+  const getCleanBackgroundImageUrl = (shotKey) => {
+    if (!selectedBackground) return null;
+    
+    const shotUrl = selectedBackground[`${shotKey}Url`];
+    if (!shotUrl) return null;
+    
+    // Return the clean background URL from the sample
+    return `${BACKEND_URL}${shotUrl}`;
   };
 
   // Get vehicle image style
@@ -899,6 +1213,52 @@ function Settings() {
       userSelect: 'none',
       touchAction: 'none',
       zIndex: 10
+    };
+  };
+
+  // Get vehicle image style for edit mode - duplicate the exact logic from getVehicleImageStyle
+  const getVehicleImageStyleForEdit = (shotKey) => {
+    // Get position for the specific shot (same logic as getCurrentPosition but for specific shot)
+    const shotAdjustments = dealershipData.adjustments?.[shotKey];
+    const position = shotAdjustments || { top: 0, left: 0, scale: 1.0 };
+    
+    // Calculate dimensions (same logic as getVehicleDimensions but with edit canvas)
+    const scaleAdjustment = position.scale;
+    
+    const canvasScale = Math.min(
+      (editCanvasRef.current?.offsetWidth || 800) / BACKGROUND_WIDTH,
+      (editCanvasRef.current?.offsetHeight || 600) / BACKGROUND_HEIGHT,
+      1
+    );
+    
+    const heightRatio = BACKGROUND_HEIGHT / naturalSize.height;
+    const widthRatio = BACKGROUND_WIDTH / naturalSize.width;
+    const base = Math.min(heightRatio, widthRatio, 1);
+    const finalScale = base * scaleAdjustment * canvasScale;
+    
+    const dimensions = {
+      displayWidth: Math.round(naturalSize.width * finalScale),
+      displayHeight: Math.round(naturalSize.height * finalScale)
+    };
+    
+    // Same positioning logic as getVehicleImageStyle
+    const containerWidth = editCanvasRef.current?.offsetWidth || 800;
+    const containerHeight = editCanvasRef.current?.offsetHeight || 600;
+    
+    const defaultLeft = Math.floor((containerWidth - dimensions.displayWidth) / 2);
+    const defaultTop = containerHeight - dimensions.displayHeight;
+    
+    const finalLeft = defaultLeft + position.left;
+    const finalTop = defaultTop + position.top;
+    
+    return {
+      position: 'absolute',
+      left: `${finalLeft}px`,
+      top: `${finalTop}px`,
+      width: `${dimensions.displayWidth}px`,
+      height: `${dimensions.displayHeight}px`,
+      pointerEvents: 'none',
+      userSelect: 'none'
     };
   };
 
@@ -1272,6 +1632,7 @@ function Settings() {
         adjustments: dealershipData.adjustments
       };
 
+      console.log('Main save - sending backgrounds:', dealershipData.backgrounds);
       const response = await axiosInstance.put(`/dealerships/${dealershipData.id}`, updateData);
       
       setSuccess('Settings updated successfully!');
@@ -1365,6 +1726,19 @@ function Settings() {
             {/* Sidebar Navigation */}
             <nav className="space-y-2">
               <button
+                onClick={() => setActiveTab('branding')}
+                className={cn(
+                  "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors",
+                  activeTab === 'branding'
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <ImageIcon className="h-4 w-4" />
+                <span className="font-medium">Branding</span>
+              </button>
+              
+              <button
                 onClick={() => setActiveTab('studio')}
                 className={cn(
                   "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors",
@@ -1413,10 +1787,19 @@ function Settings() {
             </Alert>
           )}
 
+          {/* Branding Tab Content */}
+          {activeTab === 'branding' && (
+            <BrandingTab 
+              dealershipData={dealershipData} 
+              onLogosUpdated={fetchLogos}
+            />
+          )}
+
           {/* Studio Tab Content */}
           {activeTab === 'studio' && (
             <>
-              {/* Vehicle Samples Selection - More Prominent */}
+              {/* Vehicle Samples Selection - Hidden in Edit Mode */}
+              {!editMode && (
               <div className="mb-6">
                 <div className="flex items-center space-x-3 mb-3">
                   <Camera className="h-5 w-5 text-primary" />
@@ -1451,13 +1834,65 @@ function Settings() {
                   ))}
                 </div>
               </div>
+              )}
+
+              {/* Sample Backgrounds Selection - Hidden in Edit Mode */}
+              {!editMode && (
+                <div className="mb-6">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <ImageIcon className="h-5 w-5 text-primary" />
+                    <span className="text-base font-semibold">Sample Backgrounds</span>
+                  </div>
+                  <div className="flex space-x-3 overflow-x-auto pb-2">
+                    {fetchingBackgrounds ? (
+                      <div className="flex items-center space-x-2 text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-sm">Loading backgrounds...</span>
+                      </div>
+                    ) : (
+                      sampleBackgrounds.map((background) => (
+                        <div
+                          key={background.id}
+                          className={cn(
+                            "flex-shrink-0 flex flex-col items-center space-y-2 p-3 border-2 rounded-lg cursor-pointer transition-all min-w-[140px]",
+                            selectedBackground?.id === background.id
+                              ? "border-primary bg-primary/5"
+                              : "border-muted-foreground/30 hover:border-primary/50"
+                          )}
+                          onClick={() => handleBackgroundSelection(background)}
+                        >
+                          <div className="w-20 h-15 rounded overflow-hidden bg-muted">
+                            <img
+                              src={`${BACKEND_URL}${background.frontQuarterUrl || background.frontUrl || background.sideUrl || ''}`}
+                              alt={background.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.src = '/placeholder-background.jpg';
+                              }}
+                            />
+                          </div>
+                          <div className="text-center">
+                            <p className="text-sm font-medium">{background.name}</p>
+                            {background.category && (
+                              <p className="text-xs text-muted-foreground">{background.category}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Studio Configuration */}
               <Card>
                 <CardContent className="p-6">
-                  {/* Shot Type Tabs */}
-                  <Tabs value={activeShot} onValueChange={setActiveShot} className="w-full">
-                    <TabsList className="grid w-full grid-cols-5">
+                  {/* Shot Type Tabs - Disabled in Edit Mode */}
+                  <Tabs value={activeShot} onValueChange={editMode ? undefined : setActiveShot} className="w-full">
+                    <TabsList className={cn(
+                      "grid w-full grid-cols-5",
+                      editMode && "opacity-50 pointer-events-none"
+                    )}>
                       {shotTypes.map((shot) => (
                         <TabsTrigger
                           key={shot.key}
@@ -1477,10 +1912,12 @@ function Settings() {
                             <div>
                               <Label className="text-sm font-medium">Background Image</Label>
                               <p className="text-xs text-muted-foreground mt-1">
-                                Current: {dealershipData.backgrounds[shot.key] || 'None'}
+                                Current: {getBackgroundFilename(dealershipData.backgrounds[shot.key]) || 'None'}
                               </p>
                             </div>
                             <div className="flex space-x-2">
+                              {!editMode && (
+                                <>
                               <input
                                 type="file"
                                 accept="image/*"
@@ -1523,12 +1960,220 @@ function Settings() {
                                 >
                                   <Copy className="mr-2 h-4 w-4" />
                                   Copy
+                                    </Button>
+                                  )}
+                                </>
+                              )}
+                              
+                              {/* Edit Mode Toggle - Only show if background exists */}
+                              {dealershipData.backgrounds[shot.key] && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditMode(!editMode);
+                                    if (!editMode) {
+                                      // Entering edit mode - load latest logo (first in array) if available
+                                      const latestLogo = logos[0]; // First logo is the latest
+                                      if (latestLogo) {
+                                        setStudioLogo({
+                                          id: latestLogo.id,
+                                          url: `${BACKEND_URL}/logos/${latestLogo.filename}`,
+                                          name: latestLogo.originalName
+                                        });
+                                        setStudioLogoSize(400); // Set to full width (300px max)
+                                        setStudioLogoPosition({ x: 50, y: 15 }); // Center horizontal, 20px from top (roughly 15% from top)
+                                      }
+                                    } else {
+                                      // Exiting edit mode
+                                      setStudioLogo(null);
+                                      setShowVehicleInEdit(false);
+                                    }
+                                  }}
+                                  disabled={uploadingBackground}
+                                >
+                                  <Edit3 className="mr-2 h-4 w-4" />
+                                  {editMode ? 'Exit Edit' : 'Edit'}
+                                </Button>
+                              )}
+                              
+                              {/* Save Composite Button - Only in Edit Mode */}
+                              {editMode && (
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={() => handleSaveComposite(shot.key)}
+                                  disabled={!studioLogo || saving}
+                                >
+                                  {saving ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                      Saving...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Save className="h-4 w-4 mr-2" />
+                                      Save
+                                    </>
+                                  )}
                                 </Button>
                               )}
                             </div>
                           </div>
 
-                          {/* Visual Preview & Adjustment */}
+                          {/* Edit Mode Interface */}
+                          {editMode && (
+                            <div className="space-y-4">
+                              {/* Logo Selection */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex gap-2 overflow-x-auto">
+                                  {logos.map((logo) => (
+                                    <div
+                                      key={logo.id}
+                                      className={cn(
+                                        "flex-shrink-0 w-16 h-16 border-2 rounded-lg cursor-pointer transition-all p-1",
+                                        studioLogo?.id === logo.id
+                                          ? "border-primary bg-primary/10"
+                                          : "border-gray-300 hover:border-primary/50"
+                                      )}
+                                      onClick={() => setStudioLogo({
+                                        id: logo.id,
+                                        url: `${BACKEND_URL}/logos/${logo.filename}`,
+                                        name: logo.originalName
+                                      })}
+                                    >
+                                      <img
+                                        src={`${BACKEND_URL}/logos/${logo.filename}`}
+                                        alt={logo.originalName}
+                                        className="w-full h-full object-contain"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                                
+                                {/* Show Vehicle Toggle */}
+                                <div className="flex items-center space-x-3">
+                                  <Label htmlFor="show-vehicle-toggle" className="text-sm font-medium">
+                                    Show Vehicle
+                                  </Label>
+                                  <button
+                                    id="show-vehicle-toggle"
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={showVehicleInEdit}
+                                    onClick={() => setShowVehicleInEdit(!showVehicleInEdit)}
+                                    className={`
+                                      relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+                                      ${showVehicleInEdit 
+                                        ? 'bg-primary' 
+                                        : 'bg-gray-200 dark:bg-gray-700'
+                                      }
+                                    `}
+                                  >
+                                    <span
+                                      className={`
+                                        inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform
+                                        ${showVehicleInEdit ? 'translate-x-6' : 'translate-x-1'}
+                                      `}
+                                    />
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              {/* Logo Positioning Canvas */}
+                              {studioLogo && (
+                                <div className="space-y-4">
+                                  {/* Logo Controls - Moved to top */}
+                                  <div className="flex items-center space-x-6">
+                                    <div className="flex items-center space-x-3">
+                                      <Label className="text-sm font-medium">Logo Size</Label>
+                                      <input
+                                        type="range"
+                                        min="50"
+                                        max="1024"
+                                        step="10"
+                                        value={studioLogoSize}
+                                        onChange={(e) => setStudioLogoSize(parseInt(e.target.value))}
+                                        className="w-32 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                                      />
+                                      <span className="text-sm text-muted-foreground w-12 text-center">
+                                        {studioLogoSize}px
+                                      </span>
+                                    </div>
+                                    
+                                    <div className="flex items-center space-x-2">
+                                      <Label className="text-sm font-medium">Position</Label>
+                                      <span className="text-sm text-muted-foreground">
+                                        X: {studioLogoPosition.x.toFixed(1)}%, Y: {studioLogoPosition.y.toFixed(1)}%
+                                      </span>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="w-full max-w-4xl mx-auto">
+                                    <div 
+                                      ref={editCanvasRef}
+                                      className="image-adjustor-container relative border-2 border-dashed border-muted-foreground/30 rounded-lg overflow-hidden bg-muted/20" 
+                                      style={{
+                                        width: '100%',
+                                        aspectRatio: '4/3'
+                                      }}
+                                    >
+                                    {/* Background Image */}
+                                    <img
+                                      src={
+                                        getCleanBackgroundImageUrl(shot.key) || 
+                                        `${BACKEND_URL}/uploads/backgrounds/${getBackgroundFilename(dealershipData.backgrounds[shot.key])}`
+                                      }
+                                      alt="Background"
+                                      className="w-full h-full object-cover"
+                                    />
+                                    
+                                    {/* Vehicle Image Overlay (if shown) */}
+                                    {showVehicleInEdit && selectedSample && (() => {
+                                      const shotImage = selectedSample.images.find(img => img.viewType === shot.key);
+                                      return shotImage && (
+                                        <div
+                                          className="absolute"
+                                          style={getVehicleImageStyleForEdit(shot.key)}
+                                        >
+                                          <img
+                                            src={`${BACKEND_URL}${shotImage.imageUrl.startsWith('/') ? '' : '/'}${shotImage.imageUrl}`}
+                                            alt="Vehicle"
+                                            className="w-full h-full object-contain opacity-50"
+                                          />
+                                        </div>
+                                      );
+                                    })()}
+                                    
+                                    {/* Logo Overlay */}
+                                    <div
+                                      className="absolute cursor-move select-none"
+                                      style={{
+                                        left: `${studioLogoPosition.x}%`,
+                                        top: `${studioLogoPosition.y}%`,
+                                        width: `${studioLogoSize}px`,
+                                        transform: 'translate(-50%, -50%)',
+                                        zIndex: 10
+                                      }}
+                                      onMouseDown={handleStudioLogoDragStart}
+                                      onTouchStart={handleStudioLogoDragStart}
+                                    >
+                                      <img
+                                        src={studioLogo.url}
+                                        alt={studioLogo.name}
+                                        className="w-full h-auto object-contain pointer-events-none"
+                                        draggable={false}
+                                      />
+                                    </div>
+                                  </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Visual Preview & Adjustment - Only in Normal Mode */}
+                          {!editMode && (
                           <div className="space-y-4">
                             <Label className="text-sm font-medium">Position & Scale Adjustment</Label>
                             
@@ -1638,12 +2283,13 @@ function Settings() {
                             value={getCurrentPosition().top}
                             onChange={(e) => handleAdjustmentChange('top', e.target.value)}
                             className="h-8 w-20 text-sm"
-                            title="Backend pixel coordinates (0-768)"
+                            title="Backend pixel coordinates (0-1536)"
                           />
                         </div>
                       </div>
                     </div>
                   </div>
+                          )}
                 </div>
               </TabsContent>
             ))}
@@ -1651,7 +2297,8 @@ function Settings() {
         </CardContent>
       </Card>
       
-      {/* Save Button */}
+      {/* Save Button - Hidden in Edit Mode */}
+      {!editMode && (
       <div className="mt-6 flex justify-end">
         <Button
           onClick={handleSave}
@@ -1671,6 +2318,7 @@ function Settings() {
           )}
         </Button>
       </div>
+      )}
             </>
           )}
 
@@ -1687,220 +2335,50 @@ function Settings() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Logo Management */}
-                <Card>
+              {/* Available Logos List */}
+              {filteredLogos.length > 0 && (
+                <Card className="mb-6">
                   <CardHeader>
-                    <CardTitle className="text-lg">Logo Management</CardTitle>
+                    <CardTitle className="text-lg">Available Logos</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Click on any logo to use it on the license plate. Manage logos in the Branding tab.
+                    </p>
                   </CardHeader>
-                  <CardContent className="space-y-6">
-                    {/* Logo Upload Section */}
-                    <div className="space-y-4">
-                      <Label className="text-sm font-medium">Upload New Logo</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Upload a logo to see how it will appear on the license plate.
-                      </p>
-                      
-                                              <div className="flex items-center space-x-4">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleLogoUpload}
-                            className="hidden"
-                            id="logo-upload"
+                  <CardContent>
+                    <div className="flex flex-wrap gap-3">
+                      {filteredLogos.map((logo) => (
+                        <div
+                          key={logo.id}
+                          className="flex flex-col items-center p-3 border rounded-lg cursor-pointer hover:border-primary transition-colors"
+                          onClick={() => {
+                            setUploadedLogo({
+                              id: logo.id,
+                              url: `${BACKEND_URL}/logos/${logo.filename}`,
+                              name: logo.originalName,
+                              backendData: logo
+                            });
+                            setLogoSize(50);
+                            setLogoPosition({ x: 50, y: 50 });
+                            setSuccess('Logo selected for license plate. Adjust position/size and click Save Configuration.');
+                          }}
+                        >
+                          <img
+                            src={`${BACKEND_URL}/logos/${logo.filename}`}
+                            alt={logo.originalName}
+                            className="w-12 h-12 object-contain mb-2"
                           />
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => document.getElementById('logo-upload')?.click()}
-                            disabled={uploadingLogo}
-                            className="bg-primary text-primary-foreground hover:bg-primary/90"
-                          >
-                            {uploadingLogo ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Uploading...
-                              </>
-                            ) : (
-                              <>
-                                <Upload className="mr-2 h-4 w-4" />
-                                Upload Logo
-                              </>
-                            )}
-                          </Button>
+                          <span className="text-xs text-center truncate w-20">{logo.originalName}</span>
                         </div>
+                      ))}
                     </div>
-
-                    {/* Uploaded Logos List */}
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">Uploaded Logos</Label>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs text-muted-foreground">
-                            {filteredLogos.length} of {logos.length} logo{logos.length !== 1 ? 's' : ''}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={fetchLogos}
-                            disabled={fetchingLogos}
-                            className="h-6 px-2 text-xs"
-                          >
-                            {fetchingLogos ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              '↻'
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                      
-</div>
-                      
-
-                      
-
-                      
-                      {fetchingLogos ? (
-                        <div className="flex items-center justify-center py-8">
-                          <Loader2 className="h-6 w-6 animate-spin" />
-                          <span className="ml-2 text-sm text-muted-foreground">Loading logos...</span>
-                        </div>
-                      ) : filteredLogos.length > 0 ? (
-                        <div className="space-y-3">
-                          {filteredLogos.map((logo, index) => (
-                            <div className="flex flex-col space-y-3 p-4 border rounded-lg">
-                            <div key={logo.id} className="flex flex-col space-y-3 p-4 pb-0 ">
-                              {/* Top Row: Badge, Logo, and Actions */}
-                              <div className="flex items-center space-x-4">
-                                {/* Sort Order Badge */}
-                                <div className="flex-shrink-0">
-                                  <Badge variant="secondary" className="text-xs">
-                                    #{logo.sortOrder !== null && logo.sortOrder !== undefined ? logo.sortOrder + 1 : index + 1}
-                                  </Badge>
-                                </div>
-                                
-                                {/* Logo Preview - Clickable for preview */}
-                                <div className="flex flex-col items-center space-y-1">
-                                  <img
-                                    src={`${BACKEND_URL}/logos/${logo.filename}`}
-                                    alt={`Logo: ${logo.originalName}`}
-                                    className="w-16 h-16 object-contain rounded border cursor-pointer hover:border-blue-300 transition-colors"
-                                    onClick={() => {
-                                      setPreviewLogo({
-                                        id: logo.id,
-                                        url: `${BACKEND_URL}/logos/${logo.filename}`,
-                                        name: logo.originalName,
-                                        fileSize: logo.fileSize,
-                                        uploader: logo.uploader,
-                                        createdAt: logo.createdAt
-                                      });
-                                      setShowLogoPreview(true);
-                                    }}
-                                  />
-                                </div>
-                                
-                                {/* Action Buttons */}
-                                <div className="flex items-center space-x-2 ml-auto">
-                                  <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    // Just set the logo locally, don't auto-save
-                                    setUploadedLogo({
-                                      id: logo.id,
-                                      url: `${BACKEND_URL}/logos/${logo.filename}`,
-                                      name: logo.originalName,
-                                      backendData: logo
-                                    });
-                                    setLogoSize(50);
-                                    setLogoPosition({ x: 50, y: 50 }); // Reset position for new logo
-                                    setSuccess('Logo added to license plate. Adjust position/size and click Save Configuration to persist changes.');
-                                  }}
-                                  className="text-xs"
-                                >
-                                  Use on Plate
-                                </Button>
-                                
-                                {/* Sort Order Controls */}
-                                <div className="flex items-center space-x-1">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => reorderLogo(logo.id, Math.max(0, (logo.sortOrder || 0) - 1))}
-                                    disabled={(logo.sortOrder || 0) <= 0}
-                                    className="h-6 w-6 p-0 text-xs"
-                                  >
-                                    ↑
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => reorderLogo(logo.id, (logo.sortOrder || 0) + 1)}
-                                    disabled={(logo.sortOrder || 0) >= logos.length - 1}
-                                    className="h-6 w-6 p-0 text-xs"
-                                  >
-                                    ↓
-                                  </Button>
-                                </div>
-                                
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleLogoToggleActive(logo.id, logo.isActive)}
-                                  disabled={updatingLogo === logo.id}
-                                  className="text-xs"
-                                >
-                                  {logo.isActive ? (
-                                    <EyeOff className="h-4 w-4" />
-                                  ) : (
-                                    <Eye className="h-4 w-4" />
-                                  )}
-                                </Button>
-
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => deleteLogo(logo.id)}
-                                  disabled={deletingLogo === logo.id}
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs"
-                                >
-                                  {deletingLogo === logo.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    'Delete'
-                                  )}
-                                </Button>
-                              </div>
-                              
-                              
-                            </div>
-                            </div>
-                            {/* Bottom Row: Logo Details */}
-                            <div className="ml-20 ">
-                                <p className="text-sm font-medium text-gray-900">{logo.originalName}</p>
-                                <p className="text-xs text-gray-600">
-                                  Size: {logo.size ? `${(logo.size / 1024).toFixed(1)} KB` : 'Unknown'}
-                                </p>
-                                <p className="text-xs text-gray-600">
-                                  Uploaded by {logo.uploader?.name || 'Unknown'} on {logo.createdAt ? new Date(logo.createdAt).toLocaleDateString() : 'Unknown date'}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <ImageIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          <p className="text-sm">No logos uploaded yet</p>
-                          <p className="text-xs opacity-75 mt-1">Upload your first logo to get started</p>
-                        </div>
-                      )}
                   </CardContent>
                 </Card>
+              )}
+
+              <div className="flex justify-center">
 
                 {/* License Plate Preview */}
-                <Card>
+                <Card className="max-w-2xl mx-auto">
                   <CardHeader>
                     <CardTitle className="text-lg">License Plate Preview</CardTitle>
                   </CardHeader>
@@ -2540,7 +3018,7 @@ function Settings() {
             </div>
           </div>
         </div>
-      )}
+          )}
 
       {/* Logo Preview Modal */}
       {showLogoPreview && previewLogo && (

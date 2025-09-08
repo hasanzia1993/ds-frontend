@@ -16,7 +16,7 @@ import {
   X
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { BACKEND_URL } from '../constants';
+import { BACKEND_URL, BACKGROUND_HEIGHT, BACKGROUND_WIDTH } from '../constants';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 
@@ -221,8 +221,8 @@ const StudioTab = ({
     const scaleAdjustment = getCurrentPosition().scale;
     
     // Use the same logic as ImageAdjustor
-    const BACKGROUND_WIDTH = 1024;
-    const BACKGROUND_HEIGHT = 768;
+   
+   
     
     // Calculate canvasScale like ImageAdjustor does
     const canvasScale = Math.min(
@@ -620,7 +620,7 @@ const StudioTab = ({
                             value={getCurrentPosition().top}
                             onChange={(e) => handleAdjustmentChange('top', parseInt(e.target.value) || 0)}
                             className="h-8 w-20 text-sm"
-                            title="Backend pixel coordinates (0-768)"
+                            title="Backend pixel coordinates (0-1536)"
                           />
                         </div>
                       </div>
