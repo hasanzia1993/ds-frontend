@@ -62,7 +62,7 @@ const handlerUploadImage = async ({
   }
   
   console.log("skipBGRemoval.toString", skipBGRemoval.toString());
-  const { data } = await axios.post("/images", formData, {
+  const { data } = await axios.post("/images/ai-enhanced", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
       Authorization: `Bearer ${jwtToken}`,

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { message } from 'antd';
 import axiosInstance from '../axiosInstance';
 import JwtContext from '../JwtContext';
 import DealershipContext from '../contexts/DealershipContext';
@@ -30,12 +31,14 @@ import {
   Image as ImageIcon,
   X,
   Edit3,
-  Toggle
+  Toggle,
+  Download
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { BACKEND_URL, BACKGROUND_HEIGHT, BACKGROUND_WIDTH } from '../constants';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
+import html2canvas from 'html2canvas';
 import BrandingTab from '../components/settings/BrandingTab';
 
   // Custom slider styles
@@ -78,6 +81,94 @@ import BrandingTab from '../components/settings/BrandingTab';
     const finalUrl = `${BACKEND_URL}${normalizedPath}`;
     console.log('constructFileUrl output (constructed):', finalUrl);
     return finalUrl;
+  };
+
+  // Download function for composite image - captures the existing preview
+  const handleDownloadComposite = async (shotKey) => {
+    try {
+      // Find the preview container in the current shot tab
+      const previewContainer = document.querySelector(`[data-shot="${shotKey}"] .image-adjustor-container`);
+      if (!previewContainer) {
+        message.error('Preview container not found');
+        return;
+      }
+
+      console.log('Preview container found:', previewContainer);
+      console.log('Container dimensions:', {
+        width: previewContainer.offsetWidth,
+        height: previewContainer.offsetHeight
+      });
+
+      // Check if container has any content
+      const hasImages = previewContainer.querySelectorAll('img').length;
+      console.log('Images found in container:', hasImages);
+
+      // Temporarily hide the overlay text before capturing
+      const overlayText = previewContainer.querySelector('.absolute.top-2.left-2');
+      const originalDisplay = overlayText ? overlayText.style.display : '';
+      if (overlayText) {
+        overlayText.style.display = 'none';
+        console.log('Overlay text hidden');
+      }
+
+      // Use html2canvas to capture the preview at high resolution
+      const canvas = await html2canvas(previewContainer, {
+        scale: 3, // 3x resolution for high quality
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff', // White background to ensure visibility
+        logging: true, // Enable logging to debug issues
+        foreignObjectRendering: false, // Disable this as it can cause issues
+        imageTimeout: 10000,
+        removeContainer: false,
+        ignoreElements: (element) => {
+          // Ignore the overlay text element
+          return element.classList.contains('absolute') && element.classList.contains('top-2') && element.classList.contains('left-2');
+        }
+      });
+
+      console.log('Canvas created:', {
+        width: canvas.width,
+        height: canvas.height
+      });
+
+      // Restore the overlay text visibility
+      if (overlayText) {
+        overlayText.style.display = originalDisplay;
+      }
+
+      // Check if canvas has content
+      const ctx = canvas.getContext('2d');
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const hasContent = imageData.data.some((value, index) => index % 4 !== 3 && value !== 0);
+      
+      if (!hasContent) {
+        console.warn('Canvas appears to be empty');
+        message.warning('The preview appears to be empty. Please ensure there is a background image and vehicle selected.');
+        return;
+      }
+
+      // Convert canvas to blob and download with high quality
+      canvas.toBlob((blob) => {
+        if (!blob || blob.size === 0) {
+          message.error('Failed to generate image data');
+          return;
+        }
+        
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${shotKey}-composite-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        message.success('High-quality composite image downloaded successfully');
+      }, 'image/png', 1.0); // Maximum quality (1.0)
+    } catch (error) {
+      console.error('Download error:', error);
+      message.error('Failed to download composite image: ' + error.message);
+    }
   };
 
 
@@ -1905,7 +1996,7 @@ function Settings() {
                     </TabsList>
 
                     {shotTypes.map((shot) => (
-                      <TabsContent key={shot.key} value={shot.key} className="mt-6">
+                      <TabsContent key={shot.key} value={shot.key} className="mt-6" data-shot={shot.key}>
                         <div className="space-y-6">
                           {/* Background Upload - Matching Production Layout */}
                           <div className="flex items-center justify-between">
@@ -1940,7 +2031,7 @@ function Settings() {
                                 ) : (
                                   <>
                                     <Upload className="mr-2 h-4 w-4" />
-                                    Upload Background
+                                    Upload
                                   </>
                                 )}
                               </Button>
@@ -1965,6 +2056,19 @@ function Settings() {
                                 </>
                               )}
                               
+                              {/* Download Button - Only show if background exists and not in edit mode */}
+                              {dealershipData.backgrounds[shot.key] && !editMode && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleDownloadComposite(shot.key)}
+                                  className="flex items-center space-x-2"
+                                >
+                                  <Download className="h-4 w-4" />
+                                  <span>Download</span>
+                                </Button>
+                              )}
+
                               {/* Edit Mode Toggle - Only show if background exists */}
                               {dealershipData.backgrounds[shot.key] && (
                                 <Button

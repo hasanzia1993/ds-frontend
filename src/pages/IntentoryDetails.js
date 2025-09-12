@@ -1885,8 +1885,8 @@ function VehicleDetail() {
               console.log("Saving image after adjustment");
               
               // Find the updated label with new image data
-              const updatedLabel = newLabels.find(
-                (label) => label.id === selectedRecord.id
+              const updatedLabel = newLabels?.find(
+                (label) => label?.id === selectedRecord?.id
               );
               
               if (updatedLabel && updatedLabel.Images && updatedLabel.Images[0]) {
